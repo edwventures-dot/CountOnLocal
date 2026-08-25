@@ -1,0 +1,18 @@
+:root {
+  --ss-ink: #14263A;
+  --ss-lime: #C7F34A;
+  --ss-cream: #F6F3EA;
+  --ss-white: #FFFFFF;
+  --ss-coral: #FF765C;
+  --ss-blue: #3B82F6;
+  --ss-green: #16875B;
+  --ss-amber: #B7791F;
+  --ss-red: #C43E3E;
+  --ss-muted: #607080;
+  --ss-border: #DDE3E6;
+  --ss-radius-card: 18px;
+  --ss-radius-control: 12px;
+  --ss-shadow: 0 12px 32px rgba(20, 38, 58, .08);
+  --ss-font-heading: Manrope, Inter, ui-sans-serif, system-ui, sans-serif;
+  --ss-font-body: Inter, ui-sans-serif, system-ui, sans-serif;
+}

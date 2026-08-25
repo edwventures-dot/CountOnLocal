@@ -1,0 +1,65 @@
+# ---- Dependencies ----
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/versions
+
+# ---- Next.js / build output ----
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---- Secrets / environment ----
+# Never commit real credentials. Stripe keys, Supabase service-role keys,
+# Twilio/Resend tokens, and Mapbox tokens all belong in the secret store.
+.env
+.env.*
+!.env.example
+
+# ---- Supabase ----
+.supabase/
+supabase/.branches/
+supabase/.temp/
+
+# ---- Test / coverage ----
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# ---- Tooling caches ----
+.turbo/
+.cache/
+.eslintcache
+.vercel/
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Editor / OS ----
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ---- Local agent tooling (not project source of truth) ----
+.claude/*.local.json
+
+# ---- Internal / not for the public repo ----
+# Go-to-market playbook and competitor positioning. Deliberately excluded
+# from the public repo; kept on disk only.
+private/

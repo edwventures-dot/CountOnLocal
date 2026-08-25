@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StreetStart Provider Flyer Template</title>
+<style>
+@page { size: letter; margin: .35in; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, Arial, sans-serif; background:#F6F3EA; color:#14263A; }
+.sheet { width: 7.8in; min-height: 10.3in; margin:auto; display:grid; grid-template-columns:1fr 1fr; gap:.22in; }
+.flyer { background:white; border:3px solid #14263A; border-radius:22px; padding:.28in; display:flex; flex-direction:column; min-height:4.95in; position:relative; overflow:hidden; }
+.kicker { font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+h1 { font-size:31px; line-height:1.0; margin:.12in 0 .08in; letter-spacing:-.04em; }
+.service { font-size:18px; font-weight:700; margin:.05in 0; }
+.price { font-size:38px; font-weight:900; margin:.12in 0; }
+.price small { font-size:15px; font-weight:700; }
+.row { display:flex; align-items:center; gap:.18in; margin-top:auto; }
+.qr { width:1.25in; height:1.25in; border:8px solid #14263A; padding:6px; background:repeating-conic-gradient(#14263A 0 25%, #fff 0 50%) 50%/18px 18px; }
+.scan { font-size:14px; line-height:1.35; font-weight:700; }
+.brand { margin-top:.18in; padding-top:.12in; border-top:1px solid #DDE3E6; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
+.pill { display:inline-block; background:#C7F34A; padding:7px 11px; border-radius:999px; font-weight:800; }
+.accent { position:absolute; width:120px; height:120px; border-radius:50%; background:#C7F34A; right:-65px; top:-55px; }
+@media screen { body { padding:20px; } .sheet{ box-shadow:0 12px 40px rgba(20,38,58,.12); } }
+@media print { body { background:white; } }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="flyer">
+    <div class="accent"></div>
+    <div class="kicker">Neighborhood service</div>
+    <h1>Hate bringing the cans back?</h1>
+    <div class="service">I will return them every Tuesday.</div>
+    <div class="price">$3<small>/week</small></div>
+    <div><span class="pill">Check your address</span></div>
+    <div class="row"><div class="qr" aria-label="QR placeholder"></div><div class="scan">SCAN TO SUBSCRIBE<br><span style="font-weight:500">Replace this placeholder with the provider-specific StreetStart QR code.</span></div></div>
+    <div class="brand"><strong>Jake's Bin Service</strong><span>powered by StreetStart</span></div>
+  </div>
+  <div class="flyer">
+    <div class="accent"></div>
+    <div class="kicker">Neighborhood service</div>
+    <h1>One less thing to remember every week.</h1>
+    <div class="service">{{service_name}}</div>
+    <div class="price">{{price}}<small>{{price_unit}}</small></div>
+    <div><span class="pill">Check availability</span></div>
+    <div class="row"><div class="qr" aria-label="QR placeholder"></div><div class="scan">SCAN TO SUBSCRIBE<br><span style="font-weight:500">{{short_service_promise}}</span></div></div>
+    <div class="brand"><strong>{{business_name}}</strong><span>powered by StreetStart</span></div>
+  </div>
+  <div class="flyer">
+    <div class="accent"></div>
+    <div class="kicker">Neighborhood service</div>
+    <h1>Good help is already nearby.</h1>
+    <div class="service">{{service_name}}</div>
+    <div class="price">{{price}}<small>{{price_unit}}</small></div>
+    <div><span class="pill">See the service</span></div>
+    <div class="row"><div class="qr" aria-label="QR placeholder"></div><div class="scan">SCAN FOR DETAILS<br><span style="font-weight:500">Schedule, service area, recurring billing, and reviews.</span></div></div>
+    <div class="brand"><strong>{{business_name}}</strong><span>powered by StreetStart</span></div>
+  </div>
+  <div class="flyer">
+    <div class="accent"></div>
+    <div class="kicker">StreetStart</div>
+    <h1>Your neighbor started a business.</h1>
+    <div class="service">See what they offer and whether your address is on the route.</div>
+    <div class="price" style="font-size:27px">{{business_name}}</div>
+    <div><span class="pill">Scan to visit</span></div>
+    <div class="row"><div class="qr" aria-label="QR placeholder"></div><div class="scan">LOCAL. RECURRING. SIMPLE.<br><span style="font-weight:500">Subscribe, pause, and manage service online.</span></div></div>
+    <div class="brand"><strong>streetstart.com</strong><span>Start a business where you live.</span></div>
+  </div>
+</div>
+</body>
+</html>
