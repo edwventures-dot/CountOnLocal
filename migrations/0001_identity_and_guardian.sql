@@ -88,6 +88,11 @@ create table guardian_relationships (
   guardian_user_id  uuid references guardian_profiles(user_id) on delete set null,
   invitation_email  text,
   invitation_phone  text,
+  -- The invitation token is stored only as a hash. A leaked backup or an
+  -- over-broad admin query must not yield a working link that can consent
+  -- on a guardian's behalf.
+  invitation_token_hash text unique,
+  invitation_expires_at timestamptz,
   state             guardian_state not null,
   consented_at      timestamptz,
   revoked_at        timestamptz,
@@ -102,7 +107,11 @@ create table guardian_relationships (
   constraint revoked_requires_timestamp
     check (state <> 'revoked' or revoked_at is not null),
   constraint invitation_needs_a_destination
-    check (state = 'not_required' or invitation_email is not null or invitation_phone is not null)
+    check (state = 'not_required' or invitation_email is not null or invitation_phone is not null),
+  -- A live invitation must be able to expire; SAFETY_TRUST_POLICY section 2
+  -- includes `expired` as a real state, not a theoretical one.
+  constraint pending_invitation_has_expiry
+    check (state not in ('invited','guardian_started') or invitation_expires_at is not null)
 );
 
 -- At most one live relationship per provider. Historical revoked and expired

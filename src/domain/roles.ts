@@ -58,7 +58,16 @@ export type Permission =
  * trail.
  */
 const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
-  provider: ['business:draft', 'business:publish', 'business:pause_own', 'service:configure'],
+  // The provider invites their own guardian -- API_CONTRACT, POST
+  // /v1/guardian/invitations is a provider action. Accepting and revoking
+  // belong to the guardian, never to the provider.
+  provider: [
+    'business:draft',
+    'business:publish',
+    'business:pause_own',
+    'service:configure',
+    'guardian:invite',
+  ],
 
   guardian: [
     'guardian:accept',

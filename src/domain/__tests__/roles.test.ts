@@ -5,6 +5,7 @@ import {
   requiresAudit,
   AUDITED_PERMISSIONS,
   type Role,
+  type Permission,
 } from '../roles.js'
 
 describe('permissions are additive', () => {
@@ -53,6 +54,64 @@ describe('support_agent is restricted - PRD section 5', () => {
 
   it('can still handle incidents', () => {
     expect(hasPermission(['support_agent'], 'incident:manage')).toBe(true)
+  })
+})
+
+describe('every declared permission is reachable', () => {
+  it('no permission is orphaned with no role holding it', () => {
+    // This caught a real bug: guardian:invite existed as a type but was
+    // granted to nobody, so a provider could never invite their guardian.
+    const all: Role[] = [
+      'provider',
+      'guardian',
+      'customer',
+      'support_agent',
+      'trust_safety_agent',
+      'finance_admin',
+      'platform_admin',
+    ]
+    const held = permissionsFor(all)
+    const declared: Permission[] = [
+      'business:draft',
+      'business:publish',
+      'business:pause_own',
+      'service:configure',
+      'guardian:invite',
+      'guardian:accept',
+      'guardian:revoke',
+      'guardian:pause_business',
+      'guardian:view_linked_operations',
+      'subscription:create',
+      'subscription:cancel_own',
+      'address:read_customer',
+      'identity:read_sensitive',
+      'incident:manage',
+      'moderation:act',
+      'account:suspend',
+      'payout:hold',
+      'payout:release',
+      'refund:issue',
+      'flags:manage',
+      'catalog:manage',
+      'role:grant',
+      'audit:read',
+    ]
+    const orphaned = declared.filter((p) => !held.has(p))
+    expect(orphaned).toEqual([])
+  })
+})
+
+describe('the provider owns the invitation, the guardian owns consent', () => {
+  it('a provider can invite but cannot accept or revoke', () => {
+    expect(hasPermission(['provider'], 'guardian:invite')).toBe(true)
+    expect(hasPermission(['provider'], 'guardian:accept')).toBe(false)
+    expect(hasPermission(['provider'], 'guardian:revoke')).toBe(false)
+  })
+
+  it('a guardian can accept and revoke but cannot invite themselves', () => {
+    expect(hasPermission(['guardian'], 'guardian:accept')).toBe(true)
+    expect(hasPermission(['guardian'], 'guardian:revoke')).toBe(true)
+    expect(hasPermission(['guardian'], 'guardian:invite')).toBe(false)
   })
 })
 

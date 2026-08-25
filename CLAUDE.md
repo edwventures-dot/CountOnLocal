@@ -110,6 +110,31 @@ name. Brand values live in centralized tokens
 ([assets/brand-tokens.css](assets/brand-tokens.css)) so a forced rename
 does not change the UX or business model.
 
+## Working on this repo
+
+```
+npm run dev        # Next.js dev server
+npm test           # vitest, domain unit tests
+npm run typecheck  # tsc --noEmit
+npm run build      # production build
+```
+
+Copy `.env.example` to `.env.local` and fill it from the Supabase project.
+`.env.local` is gitignored; never commit real keys and never paste them into
+a chat transcript.
+
+Layout:
+
+- `src/domain/` pure rules -- age, guardian state machine, roles, gates. No
+  I/O, no framework, fully unit-tested. Business rules go here, not in
+  handlers.
+- `src/server/` services that touch the database and write audit rows.
+- `src/lib/supabase/` clients. `server.ts` is user-scoped and respects row
+  level security; `admin.ts` bypasses it and is for the few paths that must.
+- `src/app/api/` thin route handlers -- validate, authenticate, delegate.
+- `migrations/` SQL. Domain invariants are repeated here as constraints on
+  purpose.
+
 ## When in doubt
 
 Prefer surfacing over guessing — especially for anything touching minor
