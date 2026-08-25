@@ -11,6 +11,12 @@
  *
  * Reads DATABASE_URL from .env.local. That string contains the database
  * password, so it lives only in that gitignored file.
+ *
+ * One constraint worth knowing: each file is sent as a single batch, and
+ * Postgres parses every statement in a batch before executing any of them.
+ * A file that creates an extension or type and then immediately declares a
+ * column of that type fails at parse time. Give anything that introduces a
+ * new type its own migration file.
  */
 
 import { readdir, readFile } from 'node:fs/promises'
