@@ -15,6 +15,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { publicEnv } from '@/lib/env'
+import { AddressCheck } from './AddressCheck'
 import type { Database } from '@/lib/supabase/types'
 
 export const revalidate = 300
@@ -145,17 +146,7 @@ export default async function Storefront({ params }: Params) {
 
                 {cadence ? <p style={S.cadence}>{cadence}</p> : null}
 
-                <form action={`/${business.slug}/${s.slug}/check`} method="get" style={S.eligRow}>
-                  <input
-                    name="address"
-                    placeholder="Enter your address"
-                    aria-label="Service address"
-                    style={S.input}
-                  />
-                  <button type="submit" style={S.cta}>
-                    Check my address
-                  </button>
-                </form>
+                <AddressCheck providerServiceId={s.id} />
                 <p style={S.fineprint}>
                   Recurring service. Pause or cancel any time from your account.
                 </p>
