@@ -7,7 +7,10 @@
     "typecheck": "tsc --noEmit",
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "migrate": "node --env-file=.env.local scripts/migrate.mjs",
+    "migrate:status": "node --env-file=.env.local scripts/migrate.mjs --status",
+    "db:verify": "node --env-file=.env.local scripts/verify-schema.mjs"
   },
   "repository": {
     "type": "git",
@@ -24,6 +27,7 @@
   "private": "true",
   "devDependencies": {
     "@types/node": "^26.3.0",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "typescript": "^7.0.2",
@@ -33,6 +37,7 @@
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",
     "next": "^16.3.2",
+    "pg": "^8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.4.3"
