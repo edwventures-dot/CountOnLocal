@@ -41,6 +41,13 @@ export type Database = {
           // Added in migration 0002. Links the domain user to the auth
           // provider's user without making auth the owner of our id space.
           auth_user_id: string | null
+          // Added in migration 0004. The connected account belongs to the
+          // adult who legally holds it, not to the provider.
+          stripe_connected_account_id: string | null
+          stripe_transfers_active: boolean
+          stripe_payouts_active: boolean
+          stripe_requirements_due: string[]
+          stripe_synced_at: string | null
         } & Timestamps
         Insert: {
           id?: string
@@ -50,6 +57,11 @@ export type Database = {
           phone_verified_at?: string | null
           status?: string
           auth_user_id?: string | null
+          stripe_connected_account_id?: string | null
+          stripe_transfers_active?: boolean
+          stripe_payouts_active?: boolean
+          stripe_requirements_due?: string[]
+          stripe_synced_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['users']['Insert']>
         Relationships: []
@@ -67,8 +79,10 @@ export type Database = {
           country_code: string
           display_first_name: string
           guardian_state: GuardianStateEnum
-          stripe_connected_account_id: string | null
-          payout_ready: boolean
+          // 0004 removed stripe_connected_account_id and payout_ready.
+          // Readiness is derived from the holder's Stripe state instead of
+          // stored, so there is one answer and it is the true one.
+          payout_account_user_id: string | null
           private_home_address_id: string | null
         } & Timestamps
         Insert: {
@@ -77,8 +91,7 @@ export type Database = {
           country_code?: string
           display_first_name: string
           guardian_state: GuardianStateEnum
-          stripe_connected_account_id?: string | null
-          payout_ready?: boolean
+          payout_account_user_id?: string | null
           private_home_address_id?: string | null
         }
         Update: Partial<Database['public']['Tables']['provider_profiles']['Insert']>

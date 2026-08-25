@@ -13,7 +13,7 @@
     "db:verify": "node --env-file=.env.local scripts/verify-schema.mjs",
     "db:verify:rls": "node --env-file=.env.local scripts/verify-rls.mjs",
     "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
-    "test:http": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts src/app/api/__tests__"
+    "test:http": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.http.config.ts"
   },
   "repository": {
     "type": "git",
@@ -43,6 +43,7 @@
     "pg": "^8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "stripe": "^22.5.0",
     "zod": "^4.4.3"
   }
 }

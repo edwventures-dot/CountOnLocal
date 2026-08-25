@@ -6,9 +6,7 @@ export default defineConfig({
     alias: { '@': path.resolve(process.cwd(), 'src') },
   },
   test: {
-    // Service-layer only. The HTTP suite needs a running dev server and
-    // lives in vitest.http.config.ts so a stopped server cannot fail this.
-    include: ['src/server/**/*.integration.test.ts'],
+    include: ['src/app/**/*.integration.test.ts'],
     // These talk to a real database over the network, and they create and
     // tear down auth users. Serial, with room to breathe.
     fileParallelism: false,

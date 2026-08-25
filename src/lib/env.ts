@@ -18,6 +18,9 @@ const publicSchema = z.object({
 const serverSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   AUDIT_IP_HASH_SALT: z.string().min(16, 'Use a long random salt'),
+  STRIPE_SECRET_KEY: z.string().min(1),
+  // Empty until a webhook endpoint exists; validated where it is used.
+  STRIPE_WEBHOOK_SECRET: z.string().default(''),
 })
 
 export type PublicEnv = z.infer<typeof publicSchema>
@@ -47,6 +50,8 @@ export function serverEnv(): ServerEnv {
   const parsed = serverSchema.safeParse({
     SUPABASE_SERVICE_ROLE_KEY: process.env['SUPABASE_SERVICE_ROLE_KEY'],
     AUDIT_IP_HASH_SALT: process.env['AUDIT_IP_HASH_SALT'],
+    STRIPE_SECRET_KEY: process.env['STRIPE_SECRET_KEY'],
+    STRIPE_WEBHOOK_SECRET: process.env['STRIPE_WEBHOOK_SECRET'] ?? '',
   })
   if (!parsed.success) {
     throw new Error('Missing or invalid server environment. See .env.example')
