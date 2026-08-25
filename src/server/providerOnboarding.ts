@@ -27,6 +27,19 @@ export function todayUtc(now: Date): PlainDate {
   return { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1, day: now.getUTCDate() }
 }
 
+/**
+ * Creates the provider profile and grants the provider role.
+ *
+ * `db` must be the PRIVILEGED client. Row level security grants no client
+ * write on provider_profiles or user_roles, deliberately: a client-side
+ * insert would let the caller choose their own guardian_state, which is
+ * precisely the tampering QA_ACCEPTANCE section 3 forbids. Instead the
+ * server derives guardian_state from the date of birth and writes it.
+ *
+ * Authorization is therefore the caller's responsibility. The route
+ * authenticates first and passes the session's user id -- never an id from
+ * the request body.
+ */
 export async function startProviderOnboarding(args: {
   db: SupabaseClient<Database>
   userId: string

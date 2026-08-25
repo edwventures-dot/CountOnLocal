@@ -8,6 +8,7 @@
 import { authenticate, clientIp } from '@/server/auth'
 import { onboardingStartSchema, startProviderOnboarding } from '@/server/providerOnboarding'
 import { apiError, apiOk, DENIAL_RESPONSES, newRequestId } from '@/lib/http'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 export async function POST(req: Request): Promise<Response> {
   const requestId = newRequestId()
@@ -38,7 +39,9 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const result = await startProviderOnboarding({
-    db: auth.auth.db,
+    // Privileged client: RLS grants no client write here on purpose, so the
+    // server -- not the caller -- decides guardian_state from the DOB.
+    db: supabaseAdmin(),
     userId: auth.auth.userId,
     input: parsed.data,
     now: new Date(),

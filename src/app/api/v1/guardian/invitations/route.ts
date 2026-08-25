@@ -14,6 +14,7 @@ import { authenticate, clientIp } from '@/server/auth'
 import { createGuardianInvitation, inviteSchema } from '@/server/guardianService'
 import { hasPermission } from '@/domain/roles'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 export async function POST(req: Request): Promise<Response> {
   const requestId = newRequestId()
@@ -47,7 +48,8 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const result = await createGuardianInvitation({
-    db: auth.auth.db,
+    db: supabaseAdmin(),
+    // From the verified session, never the request body.
     providerUserId: auth.auth.userId,
     input: parsed.data,
     now: new Date(),

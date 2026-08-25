@@ -41,6 +41,11 @@ export type InviteResult =
  * The raw token is returned to the caller exactly once, for delivery by
  * email or SMS. It is never written to the database, the audit log, or the
  * application log -- only its hash is stored.
+ *
+ * `db` must be the PRIVILEGED client. Clients hold no write grant on
+ * guardian_relationships, so that every transition goes through the domain
+ * state machine here and lands an audit row. providerUserId comes from the
+ * authenticated session, never from the request body.
  */
 export async function createGuardianInvitation(args: {
   db: Db
@@ -68,24 +73,38 @@ export async function createGuardianInvitation(args: {
   const token = generateInvitationToken()
   const expiresAt = invitationExpiryFrom(now).toISOString()
 
-  const { data: row, error } = await db
-    .from('guardian_relationships')
-    .upsert(
-      {
-        provider_user_id: providerUserId,
-        invitation_email: input.email ?? null,
-        invitation_phone: input.phone ?? null,
-        invitation_token_hash: hashInvitationToken(token),
-        invitation_expires_at: expiresAt,
-        state: result.to,
-      },
-      { onConflict: 'provider_user_id' },
-    )
-    .select('id')
-    .single()
+  const fields = {
+    invitation_email: input.email ?? null,
+    invitation_phone: input.phone ?? null,
+    invitation_token_hash: hashInvitationToken(token),
+    invitation_expires_at: expiresAt,
+    state: result.to,
+  }
 
-  if (error || !row) {
-    console.error('[guardian] invitation write failed', error?.message)
+  // Deliberately not an upsert. The unique index on provider_user_id is
+  // partial -- it excludes revoked and expired rows so history survives --
+  // and Postgres will not use a partial index for ON CONFLICT. More
+  // importantly, re-inviting after a revocation should leave the revoked
+  // row intact as an audit record and open a NEW relationship, not
+  // overwrite the evidence that consent was once withdrawn.
+  const { data: live } = await db
+    .from('guardian_relationships')
+    .select('id')
+    .eq('provider_user_id', providerUserId)
+    .not('state', 'in', '(revoked,expired)')
+    .maybeSingle()
+
+  const written = live
+    ? await db.from('guardian_relationships').update(fields).eq('id', live.id).select('id').single()
+    : await db
+        .from('guardian_relationships')
+        .insert({ provider_user_id: providerUserId, ...fields })
+        .select('id')
+        .single()
+
+  const row = written.data
+  if (written.error || !row) {
+    console.error('[guardian] invitation write failed', written.error?.message)
     return { ok: false, code: 'WRITE_FAILED' }
   }
 
@@ -229,6 +248,9 @@ export type RevokeResult =
  * guardian state on every attempt rather than a cached flag -- so they take
  * effect the moment this row is written, with no job to run and no cache to
  * bust.
+ *
+ * `db` must be the PRIVILEGED client, for the same reason as the other
+ * mutations. Ownership is checked explicitly below rather than by policy.
  *
  * NOT YET WIRED: setting businesses.state to `paused_guardian`. The
  * businesses table arrives in build-sequence step 3; until it exists there

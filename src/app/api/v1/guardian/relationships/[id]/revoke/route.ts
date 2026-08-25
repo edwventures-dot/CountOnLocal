@@ -13,6 +13,7 @@ import { authenticate, clientIp } from '@/server/auth'
 import { revokeGuardianRelationship } from '@/server/guardianService'
 import { hasPermission } from '@/domain/roles'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
 const revokeSchema = z.object({
@@ -54,7 +55,9 @@ export async function POST(
   const { id } = await ctx.params
 
   const result = await revokeGuardianRelationship({
-    db: auth.auth.db,
+    // Privileged client; guardianService checks that the actor is party to
+    // the relationship before transitioning it.
+    db: supabaseAdmin(),
     relationshipId: id,
     actorUserId: auth.auth.userId,
     actorRole: isStaff && !isGuardian ? 'trust_safety_agent' : 'guardian',

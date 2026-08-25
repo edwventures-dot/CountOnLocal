@@ -11,7 +11,8 @@
     "migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "migrate:status": "node --env-file=.env.local scripts/migrate.mjs --status",
     "db:verify": "node --env-file=.env.local scripts/verify-schema.mjs",
-    "db:verify:rls": "node --env-file=.env.local scripts/verify-rls.mjs"
+    "db:verify:rls": "node --env-file=.env.local scripts/verify-rls.mjs",
+    "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts"
   },
   "repository": {
     "type": "git",

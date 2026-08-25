@@ -38,6 +38,9 @@ export type Database = {
           email_verified_at: string | null
           phone_verified_at: string | null
           status: string
+          // Added in migration 0002. Links the domain user to the auth
+          // provider's user without making auth the owner of our id space.
+          auth_user_id: string | null
         } & Timestamps
         Insert: {
           id?: string
@@ -46,6 +49,7 @@ export type Database = {
           email_verified_at?: string | null
           phone_verified_at?: string | null
           status?: string
+          auth_user_id?: string | null
         }
         Update: Partial<Database['public']['Tables']['users']['Insert']>
         Relationships: []
