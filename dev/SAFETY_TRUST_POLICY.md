@@ -1,8 +1,8 @@
-# StreetStart Safety & Trust Policy - Product Rules
+# Count On Local Safety & Trust Policy - Product Rules
 
 ## Purpose
 
-StreetStart enables local service relationships that may involve minors. Safety rules are product requirements, not optional content guidelines.
+Count On Local enables local service relationships that may involve minors. Safety rules are product requirements, not optional content guidelines.
 
 This file defines the V1 behavior the application must enforce. Legal counsel should convert these product rules into final Terms/Privacy/Safety language before public launch.
 
@@ -47,7 +47,7 @@ Visible only to:
 - that customer;
 - assigned provider when operationally necessary;
 - linked guardian for a minor provider;
-- authorized StreetStart staff with audited access.
+- authorized Count On Local staff with audited access.
 
 Search/indexing endpoints must not return raw customer addresses.
 
@@ -108,11 +108,11 @@ Customer must provide:
 
 Provider sets personal limits. The system must not match an animal outside those limits.
 
-StreetStart may suspend a dog/service after a safety report.
+Count On Local may suspend a dog/service after a safety report.
 
 ## 8. Equipment rules
 
-Minor providers cannot advertise or be instructed through StreetStart to use prohibited equipment. Service instructions are scanned/reviewed for obvious attempts to bypass this.
+Minor providers cannot advertise or be instructed through Count On Local to use prohibited equipment. Service instructions are scanned/reviewed for obvious attempts to bypass this.
 
 V1 minor-safe defaults:
 
@@ -141,7 +141,7 @@ V1 should require:
 - service-address verification sufficient for payment/risk systems;
 - acceptance of Customer Conduct rules.
 
-For higher-risk categories/markets, StreetStart can require additional identity verification through feature flags.
+For higher-risk categories/markets, Count On Local can require additional identity verification through feature flags.
 
 ## 11. Provider identity
 
@@ -195,7 +195,7 @@ System behavior:
 
 ## 16. Emergency language
 
-StreetStart is not an emergency service. In an active emergency, UI should direct the user to local emergency services without pretending StreetStart can dispatch help.
+Count On Local is not an emergency service. In an active emergency, UI should direct the user to local emergency services without pretending Count On Local can dispatch help.
 
 ## 17. Data minimization
 
@@ -236,7 +236,7 @@ Avoid without documented basis:
 - `Safe provider`
 - `Fully vetted`
 - `Background checked`
-- `StreetStart guarantees your safety`
+- `Count On Local guarantees your safety`
 
 ## 20. Regulatory/product review triggers
 

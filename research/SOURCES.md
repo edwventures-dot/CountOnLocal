@@ -26,12 +26,12 @@ Checked 2026-08-24.
 
 ## Child privacy
 
-- FTC COPPA materials / rule. The StreetStart design avoids under-13 provider accounts in V1 rather than building a child-directed data-collection flow.  
+- FTC COPPA materials / rule. The Count On Local design avoids under-13 provider accounts in V1 rather than building a child-directed data-collection flow.  
   https://www.ftc.gov/legal-library/browse/rules/childrens-online-privacy-protection-rule-coppa
 
 ## Youth work / hazardous work
 
-- U.S. Department of Labor child labor / hazardous occupation guidance. StreetStart's product rules are intentionally more conservative than treating every legally possible activity as a marketplace-allowed activity.  
+- U.S. Department of Labor child labor / hazardous occupation guidance. Count On Local's product rules are intentionally more conservative than treating every legally possible activity as a marketplace-allowed activity.  
   https://www.dol.gov/agencies/whd/youthrules
 
 ## Important note

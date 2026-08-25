@@ -1,4 +1,4 @@
-# StreetStart Approved V1 Copy Deck
+# Count On Local Approved V1 Copy Deck
 
 ## Marketing site
 
@@ -31,7 +31,7 @@
 
 ### Age gate
 **Headline:** First, how old are you?  
-**Body:** StreetStart is for providers 13 and older. If you are under 18, a parent or legal guardian will need to connect before you can accept paid customers.
+**Body:** Count On Local is for providers 13 and older. If you are under 18, a parent or legal guardian will need to connect before you can accept paid customers.
 
 ### Guardian invitation
 **Headline:** Bring in your guardian.  
@@ -44,7 +44,7 @@
 
 ### Pricing
 **Headline:** What is your work worth?  
-**Helper:** You set the service price. StreetStart does not take a cut from the price you set. Customers pay a separate platform fee.  
+**Helper:** You set the service price. Count On Local does not take a cut from the price you set. Customers pay a separate platform fee.  
 **Callout:** Set your price. Keep your price.
 
 ### Service area
@@ -115,7 +115,7 @@
 ### Price block
 `Service: $3/week`  
 `Billed every 4 weeks: $12.00`  
-`StreetStart platform fee: $1.80`  
+`Count On Local platform fee: $1.80`  
 `Total today: $13.80`
 
 ### Recurring consent
@@ -147,13 +147,13 @@
 ## Guardian
 
 ### Invitation email title
-`[Provider first name] wants to start a StreetStart business`
+`[Provider first name] wants to start a Count On Local business`
 
 ### Invitation body
 `They can build the page now, but paid services stay locked until a parent or legal guardian completes the required connection.`
 
 ### New customer alert
-`New recurring customer: 1 Tuesday service added. Open StreetStart to review the updated route.`
+`New recurring customer: 1 Tuesday service added. Open Count On Local to review the updated route.`
 
 ### Pause confirmation
 `Business paused. New subscriptions and future charges are stopped while this pause is active.`
@@ -165,7 +165,7 @@
 
 ### Incident report
 **Headline:** Tell us what happened.  
-**Body:** Choose the closest issue and include only the details StreetStart needs to review it. If anyone is in immediate danger, contact local emergency services first.
+**Body:** Choose the closest issue and include only the details Count On Local needs to review it. If anyone is in immediate danger, contact local emergency services first.
 
 ## QR flyer copy
 
@@ -174,19 +174,19 @@
 I will return them every Tuesday.  
 **$3/week**  
 Scan to check your address and subscribe.  
-`Jake's Bin Service - powered by StreetStart`
+`Jake's Bin Service - powered by Count On Local`
 
 ### Generic recurring flyer
 **One less thing to remember every week.**  
 `{{service_name}}`  
 `{{price}}`  
 Scan to check availability and subscribe.  
-`{{business_name}} - powered by StreetStart`
+`{{business_name}} - powered by Count On Local`
 
 ## Transactional notification snippets
 
 - `New customer added to Tuesday. You now have 9 active stops.`
-- `Tomorrow's route: 9 stops. Open StreetStart to review changes.`
+- `Tomorrow's route: 9 stops. Open Count On Local to review changes.`
 - `Service marked complete. Nice work.`
 - `A customer skipped next Tuesday. Your route has been updated.`
 - `Your payout is on the way.`

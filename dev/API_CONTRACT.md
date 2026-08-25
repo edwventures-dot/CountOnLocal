@@ -1,4 +1,4 @@
-# StreetStart API Contract - V1 Surface
+# Count On Local API Contract - V1 Surface
 
 This is a behavioral contract, not a requirement to use REST. GraphQL/RPC is acceptable if equivalent authorization, idempotency, validation, and audit behavior exist.
 

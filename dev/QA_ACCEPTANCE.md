@@ -1,4 +1,4 @@
-# StreetStart V1 QA / Acceptance Criteria
+# Count On Local V1 QA / Acceptance Criteria
 
 ## Release gate philosophy
 

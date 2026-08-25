@@ -1,4 +1,4 @@
-# StreetStart - Complete Product Design Handoff
+# Count On Local - Complete Product Design Handoff
 
 **Owner:** EDW Ventures  
 **Design baseline:** Final V1 product design  
@@ -8,17 +8,17 @@
 
 ## Product in one sentence
 
-StreetStart lets a young person launch a professional neighborhood service page, sell recurring services to nearby customers, and run the route, customers, payments, reviews, and growth of that microbusiness from one dashboard.
+Count On Local lets a young person launch a professional neighborhood service page, sell recurring services to nearby customers, and run the route, customers, payments, reviews, and growth of that microbusiness from one dashboard.
 
 ## Core differentiation
 
-StreetStart is not another "post a job and wait for applicants" marketplace. The provider starts the business first. Customers discover or scan the provider's page and subscribe to a recurring service.
+Count On Local is not another "post a job and wait for applicants" marketplace. The provider starts the business first. Customers discover or scan the provider's page and subscribe to a recurring service.
 
 The product is deliberately optimized for tiny, repeatable neighborhood services that are often too small for established service companies: trash-can curb service, dog walking, manual yard cleanup, watering, porch/package help, and similar work.
 
 ## Locked V1 decisions
 
-- Brand used throughout the design: **StreetStart**.
+- Brand used throughout the design: **Count On Local**.
 - Primary tagline: **Start a business where you live.**
 - Product thesis: **storefront + subscription + route operations**, not an open bidding board.
 - Web-first responsive product. No app install is required to discover, subscribe, or manage a service.
@@ -26,7 +26,7 @@ The product is deliberately optimized for tiny, repeatable neighborhood services
 - Ages 13-17 require a verified parent/legal guardian relationship before paid services go live.
 - Public profiles never expose a provider's home address, school, exact age, private schedule, or live location.
 - The V1 service catalog is allowlist-based. High-risk categories are unavailable even if a provider asks to add them.
-- Provider sets the list price and keeps the listed service amount. StreetStart monetizes with a customer platform fee.
+- Provider sets the list price and keeps the listed service amount. Count On Local monetizes with a customer platform fee.
 - Weekly microservices are billed in 4-week cycles to avoid destroying unit economics with repeated card fees.
 - V1 is recurring-first. One-time add-ons are allowed only as extensions of an approved provider service; no general job-posting marketplace.
 - Provider businesses have shareable public pages and built-in printable QR flyers.
@@ -51,13 +51,13 @@ The product is deliberately optimized for tiny, repeatable neighborhood services
 - `marketing/flyer_template.html` - printable provider QR flyer template.
 
 ### Research
-- `research/COMPETITOR_SNAPSHOT.md` - current competitive landscape and StreetStart positioning. *(internal - not included in this repository)*
+- `research/COMPETITOR_SNAPSHOT.md` - current competitive landscape and Count On Local positioning. *(internal - not included in this repository)*
 - `research/SOURCES.md` - current sources used for product/compliance assumptions.
 
 ### Prototype / assets
 - `prototype/index.html` - zero-install clickable desktop/mobile reference prototype.
-- `assets/streetstart-logo.svg` - horizontal logo.
-- `assets/streetstart-mark.svg` - standalone mark.
+- `assets/countonlocal-logo.svg` - horizontal logo.
+- `assets/countonlocal-mark.svg` - standalone mark.
 - `assets/brand-tokens.css` - implementation tokens.
 
 ## Recommended development sequence
@@ -76,4 +76,4 @@ The product is deliberately optimized for tiny, repeatable neighborhood services
 
 ## External launch gates
 
-The product design is complete, but public launch still requires normal non-design approvals: U.S. legal review of marketplace terms and minor participation, payment-processor approval for the final Connect setup, insurance review, state-by-state service restrictions if expansion requires them, and trademark/domain clearance for StreetStart. If a legal name change is required, the product uses centralized brand tokens so a rename does not change the UX or business model.
+The product design is complete, but public launch still requires normal non-design approvals: U.S. legal review of marketplace terms and minor participation, payment-processor approval for the final Connect setup, insurance review, state-by-state service restrictions if expansion requires them, and trademark/domain clearance for Count On Local. If a legal name change is required, the product uses centralized brand tokens so a rename does not change the UX or business model.

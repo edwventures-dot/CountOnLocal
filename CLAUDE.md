@@ -1,12 +1,12 @@
-# CLAUDE.md — working agreement for the StreetStart repository
+# CLAUDE.md — working agreement for the Count On Local repository
 
-This file orients AI-assisted work in the StreetStart repo. Read the
+This file orients AI-assisted work in the Count On Local repo. Read the
 linked documents before implementing anything non-trivial — this file is
 a summary and a set of hard rules, not a replacement for them.
 
 ## What this project is
 
-StreetStart is a responsive-web neighborhood microbusiness platform: a
+Count On Local is a responsive-web neighborhood microbusiness platform: a
 provider (age 13+) launches a service page, sells **recurring** local
 services to nearby households, and runs the route, customers, payments,
 reviews, and growth from one dashboard. Owner: EDW Ventures.
@@ -105,7 +105,7 @@ Per README, do not jump ahead:
 Design is complete; public launch still needs U.S. legal review of
 marketplace terms and minor participation, payment-processor approval of
 the final Connect setup, insurance review, state-by-state service
-restriction review, and trademark/domain clearance for the StreetStart
+restriction review, and trademark/domain clearance for the Count On Local
 name. Brand values live in centralized tokens
 ([assets/brand-tokens.css](assets/brand-tokens.css)) so a forced rename
 does not change the UX or business model.

@@ -1,4 +1,4 @@
-# StreetStart Technical Implementation Specification
+# Count On Local Technical Implementation Specification
 
 ## 1. Recommended architecture
 
@@ -125,10 +125,10 @@ Use IANA time zones and store timestamps in UTC. Service date should also be sto
 
 Recommended V1 approach:
 
-- StreetStart is marketplace platform.
+- Count On Local is marketplace platform.
 - Provider has a Stripe connected account.
 - Customer stores payment method with Stripe.
-- StreetStart computes each 4-week billing cycle from planned billable occurrences.
+- Count On Local computes each 4-week billing cycle from planned billable occurrences.
 - Charge includes provider service subtotal + platform fee.
 - Provider ledger receives the service subtotal.
 - Credits reduce future cycle subtotal or produce refund when needed.

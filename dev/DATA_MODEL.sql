@@ -1,4 +1,4 @@
--- StreetStart V1 reference schema (PostgreSQL / PostGIS-oriented)
+-- Count On Local V1 reference schema (PostgreSQL / PostGIS-oriented)
 -- Names and columns are implementation guidance, not migration-ready without engineering review.
 
 create extension if not exists pgcrypto;

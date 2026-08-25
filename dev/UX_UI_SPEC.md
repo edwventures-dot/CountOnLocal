@@ -1,8 +1,8 @@
-# StreetStart UX / UI Specification
+# Count On Local UX / UI Specification
 
 ## 1. Experience direction
 
-StreetStart should feel like a modern small-business product that happens to be accessible to teenagers, not a children's app and not a corporate contractor marketplace.
+Count On Local should feel like a modern small-business product that happens to be accessible to teenagers, not a children's app and not a corporate contractor marketplace.
 
 Visual adjectives:
 
@@ -63,7 +63,7 @@ Common scale: 4, 8, 12, 16, 24, 32, 48, 64.
 
 ## 3. Logo direction
 
-The StreetStart mark is a rounded route/forward symbol built from an `S` path and two route endpoints. It should communicate "start here, move forward" without using a map pin that implies a provider's exact location.
+The Count On Local mark is a rounded route/forward symbol built from an `S` path and two route endpoints. It should communicate "start here, move forward" without using a map pin that implies a provider's exact location.
 
 Logo usage:
 
@@ -144,7 +144,7 @@ One action, one explanation, no generic illustration requirement.
 ## 7. Public landing page
 
 ### Header
-StreetStart logo.
+Count On Local logo.
 Links: Find help, Start a business, How it works, Safety.
 CTA: Start a business.
 
@@ -190,7 +190,7 @@ Order:
 7. service area label/map approximation;
 8. reviews;
 9. FAQs/cancellation;
-10. StreetStart trust/footer.
+10. Count On Local trust/footer.
 
 Hero example:
 
@@ -227,7 +227,7 @@ Required summary:
 - frequency;
 - expected service day/window;
 - provider price;
-- StreetStart platform fee;
+- Count On Local platform fee;
 - billing cadence;
 - charge today;
 - next charge;

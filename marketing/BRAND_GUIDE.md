@@ -1,8 +1,8 @@
-# StreetStart Brand Guide
+# Count On Local Brand Guide
 
 ## Brand idea
 
-**StreetStart** is where a small neighborhood service becomes a real business.
+**Count On Local** is where a small neighborhood service becomes a real business.
 
 The brand should respect young providers as owners. It is not a chore chart, a teen employment agency, or a charity program.
 
@@ -28,11 +28,11 @@ Guardian:
 
 ## Positioning statement
 
-For motivated young people who want to earn independently, StreetStart is a neighborhood microbusiness platform that provides a professional storefront, recurring customers, payments, route tools, and guardian support. Unlike job boards that make workers wait for gigs, StreetStart helps providers create the offer first and build a small business around repeat neighborhood demand.
+For motivated young people who want to earn independently, Count On Local is a neighborhood microbusiness platform that provides a professional storefront, recurring customers, payments, route tools, and guardian support. Unlike job boards that make workers wait for gigs, Count On Local helps providers create the offer first and build a small business around repeat neighborhood demand.
 
 ## Brand promise
 
-**If you are willing to do useful work consistently, StreetStart gives you the tools to sell it like a real business.**
+**If you are willing to do useful work consistently, Count On Local gives you the tools to sell it like a real business.**
 
 ## Audience hierarchy
 
@@ -51,7 +51,7 @@ Motivations: safety, visibility, practical experience, controlled independence, 
 
 ## Voice
 
-StreetStart is:
+Count On Local is:
 
 - direct;
 - upbeat;
@@ -114,7 +114,7 @@ Use route lines, service cards, simplified houses/blocks, checkmarks, receipts, 
 
 ## Logo concept
 
-StreetStart's mark combines a route-like `S` and a forward endpoint. It represents starting locally and building momentum.
+Count On Local's mark combines a route-like `S` and a forward endpoint. It represents starting locally and building momentum.
 
 Minimum clear space: height of the mark's endpoint circle on all sides.
 
@@ -151,4 +151,4 @@ The point is not glamorous work. The point is turning overlooked recurring annoy
 
 ## Brand architecture
 
-StreetStart is consumer-facing. EDW Ventures appears in legal/footer/corporate contexts, not as the main customer brand.
+Count On Local is consumer-facing. EDW Ventures appears in legal/footer/corporate contexts, not as the main customer brand.

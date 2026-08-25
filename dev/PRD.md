@@ -1,8 +1,8 @@
-# StreetStart Product Requirements Document
+# Count On Local Product Requirements Document
 
 ## 1. Product definition
 
-StreetStart is a neighborhood microbusiness platform. A provider creates a small local service business, publishes a professional service page, acquires customers through a share link, QR flyer, or StreetStart discovery, and manages recurring service from a provider dashboard.
+Count On Local is a neighborhood microbusiness platform. A provider creates a small local service business, publishes a professional service page, acquires customers through a share link, QR flyer, or Count On Local discovery, and manages recurring service from a provider dashboard.
 
 The primary unit is not a job posting. It is a **provider-owned recurring service plan**.
 
@@ -12,7 +12,7 @@ Example:
 - Service: Trash cans curb to house
 - Frequency: Weekly
 - Provider price: $3/week
-- Billing: $12 every 4 weeks plus StreetStart platform fee
+- Billing: $12 every 4 weeks plus Count On Local platform fee
 - Service day: Tuesday
 - Capacity: 30 addresses
 - Area: provider-defined neighborhood zone
@@ -72,13 +72,13 @@ The provider chooses business name, service, price, schedule, capacity, descript
 Age 13+. Creates and operates a microbusiness.
 
 ### Guardian
-Required for a provider aged 13-17. Verifies relationship/consent as required by payments and StreetStart policy. Can review services, service areas, scheduled work, incidents, and payout status.
+Required for a provider aged 13-17. Verifies relationship/consent as required by payments and Count On Local policy. Can review services, service areas, scheduled work, incidents, and payout status.
 
 ### Customer
 Adult account holder who subscribes to a provider service for one or more service addresses.
 
 ### Admin
-StreetStart operations/trust-and-safety staff.
+Count On Local operations/trust-and-safety staff.
 
 ### Support
 Restricted admin role for customer/provider assistance without unrestricted access to sensitive identity data.
@@ -93,7 +93,7 @@ Restricted admin role for customer/provider assistance without unrestricted acce
 
 ## 7. V1 service catalog
 
-StreetStart uses a centrally managed catalog. Providers do not create arbitrary categories.
+Count On Local uses a centrally managed catalog. Providers do not create arbitrary categories.
 
 ### Launch-approved categories
 
@@ -161,7 +161,7 @@ The system stores an unpublished draft throughout the flow.
 
 ## 9. Public storefront requirements
 
-URL pattern: `streetstart.com/{slug}` with service deep links such as `streetstart.com/{slug}/{service-slug}`.
+URL pattern: `countonlocal.com/{slug}` with service deep links such as `countonlocal.com/{slug}/{service-slug}`.
 
 The page must show:
 
@@ -245,7 +245,7 @@ Example:
 
 - provider list price: $3/week;
 - 4-week service subtotal: $12.00;
-- StreetStart platform fee at 15%: $1.80;
+- Count On Local platform fee at 15%: $1.80;
 - customer charge: $13.80 before any required tax;
 - provider ledger credit: $12.00.
 
@@ -297,7 +297,7 @@ Review history and provider response capability under moderation rules.
 
 ## 14. Route density system
 
-StreetStart should optimize for **revenue per local route**, not total map radius.
+Count On Local should optimize for **revenue per local route**, not total map radius.
 
 Provider metrics:
 
@@ -319,7 +319,7 @@ Public social proof can say "Popular nearby" or "Serving 8 homes in this area" o
 
 For 13-17 providers, guardian can:
 
-- see active StreetStart business name and public page;
+- see active Count On Local business name and public page;
 - see approved services;
 - approve or revoke service-category permissions;
 - see service-area boundaries;

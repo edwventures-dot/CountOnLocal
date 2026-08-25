@@ -1,7 +1,7 @@
-<svg width="760" height="180" viewBox="0 0 760 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="880" height="180" viewBox="0 0 880 180" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect x="8" y="10" width="160" height="160" rx="38" fill="#14263A"/>
   <path d="M53 63C63 48 85 45 102 53C120 61 124 78 112 88C102 97 76 92 64 101C51 111 57 131 76 135C93 139 114 131 124 115" stroke="#C7F34A" stroke-width="14" stroke-linecap="round"/>
   <circle cx="52" cy="64" r="8" fill="#FF765C"/>
   <path d="M119 104L129 116L114 122" stroke="#C7F34A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="205" y="113" font-family="Manrope, Arial, sans-serif" font-size="76" font-weight="800" fill="#14263A">StreetStart</text>
+  <text x="205" y="113" font-family="Manrope, Arial, sans-serif" font-size="76" font-weight="800" fill="#14263A">Count On Local</text>
 </svg>
