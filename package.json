@@ -1,0 +1,27 @@
+{
+  "name": "countonlocal",
+  "version": "0.1.0",
+  "description": "Count On Local - neighborhood microbusiness platform",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edwventures-dot/CountOnLocal.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/edwventures-dot/CountOnLocal/issues"
+  },
+  "homepage": "https://github.com/edwventures-dot/CountOnLocal#readme",
+  "private": "true",
+  "devDependencies": {
+    "@types/node": "^26.3.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

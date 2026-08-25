@@ -63,3 +63,6 @@ Thumbs.db
 # Go-to-market playbook and competitor positioning. Deliberately excluded
 # from the public repo; kept on disk only.
 private/
+
+# ---- Node ----
+node_modules/
