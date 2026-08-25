@@ -12,9 +12,9 @@
  * date of birth on every evaluation, so there is no field to tamper with.
  */
 
-import { classifyAge, decideProviderAge, type PlainDate } from './age.js'
-import { guardianCapabilities, isGuardianCleared, type GuardianState } from './guardian.js'
-import { hasPermission, type Role } from './roles.js'
+import { classifyAge, decideProviderAge, type PlainDate } from './age'
+import { guardianCapabilities, isGuardianCleared, type GuardianState } from './guardian'
+import { hasPermission, type Role } from './roles'
 
 export type ProviderGateContext = {
   roles: readonly Role[]

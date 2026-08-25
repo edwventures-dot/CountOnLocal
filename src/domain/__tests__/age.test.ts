@@ -5,7 +5,7 @@ import {
   classifyAge,
   decideProviderAge,
   isEligibleCustomerAge,
-} from '../age.js'
+} from '../age'
 
 const on = (s: string) => parsePlainDate(s)
 

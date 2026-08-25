@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { parsePlainDate } from '../age.js'
-import type { GuardianState } from '../guardian.js'
+import { parsePlainDate } from '../age'
+import type { GuardianState } from '../guardian'
 import {
   canPublishBusiness,
   canAcceptNewSubscription,
@@ -8,7 +8,7 @@ import {
   canDraftBusiness,
   guardianStateIsConsistent,
   type ProviderGateContext,
-} from '../gates.js'
+} from '../gates'
 
 const TODAY = parsePlainDate('2026-08-24')
 

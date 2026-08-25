@@ -12,7 +12,7 @@
  * accepting money are gated on `verified`, and only on `verified`.
  */
 
-import type { AgeBand } from './age.js'
+import type { AgeBand } from './age'
 
 export type GuardianState =
   | 'not_required'

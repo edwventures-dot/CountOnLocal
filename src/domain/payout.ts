@@ -14,8 +14,8 @@
  * of the payout differs. PRD section 12: "Set your price. Keep your price."
  */
 
-import type { AgeBand } from './age.js'
-import { isGuardianCleared, type GuardianState } from './guardian.js'
+import type { AgeBand } from './age'
+import { isGuardianCleared, type GuardianState } from './guardian'
 
 /**
  * Mirrored from Stripe. Never assumed, never written by a client.

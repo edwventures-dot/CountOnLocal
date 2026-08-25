@@ -6,7 +6,7 @@ import {
   AUDITED_PERMISSIONS,
   type Role,
   type Permission,
-} from '../roles.js'
+} from '../roles'
 
 describe('permissions are additive', () => {
   it('unions the permissions of every held role', () => {

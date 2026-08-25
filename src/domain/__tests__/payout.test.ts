@@ -6,8 +6,8 @@ import {
   canReceivePayments,
   NO_ACCOUNT,
   type StripeAccountState,
-} from '../payout.js'
-import type { GuardianState } from '../guardian.js'
+} from '../payout'
+import type { GuardianState } from '../guardian'
 
 const PROVIDER = 'provider-uuid'
 const GUARDIAN = 'guardian-uuid'

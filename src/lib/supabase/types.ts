@@ -140,6 +140,29 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['guardian_relationships']['Insert']>
         Relationships: []
       }
+      stripe_events: {
+        Row: {
+          id: string
+          type: string
+          account_id: string | null
+          api_version: string | null
+          received_at: string
+          processed_at: string | null
+          payload: unknown
+          error: string | null
+        }
+        Insert: {
+          id: string
+          type: string
+          account_id?: string | null
+          api_version?: string | null
+          processed_at?: string | null
+          payload: unknown
+          error?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['stripe_events']['Insert']>
+        Relationships: []
+      }
       audit_log: {
         Row: {
           id: number

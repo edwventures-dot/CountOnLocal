@@ -15,7 +15,13 @@
  */
 
 import { classifyAge, parsePlainDate } from '@/domain/age'
-import { resolvePayoutHolder, payoutStage, type StripeAccountState } from '@/domain/payout'
+import {
+  resolvePayoutHolder,
+  payoutStage,
+  canReceivePayments,
+  NO_ACCOUNT,
+  type StripeAccountState,
+} from '@/domain/payout'
 import type { GuardianState } from '@/domain/guardian'
 import { stripe } from '@/lib/stripe'
 import { writeAudit } from '@/server/audit'
@@ -312,4 +318,72 @@ export async function syncAccountState(args: {
   if (!updated) return { ok: false, code: 'NOT_FOUND' }
 
   return { ok: true, state, stage: payoutStage(state) }
+}
+
+export type PayoutStatus = {
+  holder: 'self' | 'guardian' | null
+  holderUserId: string | null
+  stage: ReturnType<typeof payoutStage>
+  requirementsDue: readonly string[]
+  /** Whether guardian clearance AND Stripe readiness both hold. */
+  canReceivePayments: boolean
+  guardianState: GuardianState
+}
+
+/**
+ * Reads the mirrored payout state without calling Stripe.
+ *
+ * Webhooks keep the mirror current, so a dashboard poll should not cost a
+ * Stripe round trip. Callers who need certainty right now -- the return
+ * leg of the onboarding flow, for instance -- call syncAccountState first.
+ */
+export async function getPayoutStatus(args: {
+  db: Db
+  providerUserId: string
+  now: Date
+}): Promise<{ ok: true; status: PayoutStatus } | { ok: false; code: 'NO_PROVIDER_PROFILE' }> {
+  const { db, providerUserId, now } = args
+
+  const ctx = await loadProviderContext(db, providerUserId, now)
+  if (!ctx) return { ok: false, code: 'NO_PROVIDER_PROFILE' }
+
+  const holderUserId = ctx.profile.payout_account_user_id
+  let account = NO_ACCOUNT
+  if (holderUserId) {
+    const { data: holder } = await db
+      .from('users')
+      .select(
+        'stripe_connected_account_id, stripe_transfers_active, stripe_payouts_active, stripe_requirements_due',
+      )
+      .eq('id', holderUserId)
+      .maybeSingle()
+    if (holder) {
+      account = {
+        accountId: holder.stripe_connected_account_id,
+        transfersActive: holder.stripe_transfers_active,
+        payoutsActive: holder.stripe_payouts_active,
+        requirementsDue: (holder.stripe_requirements_due ?? []) as string[],
+      }
+    }
+  }
+
+  const gate = canReceivePayments({
+    band: ctx.band,
+    providerUserId,
+    guardianUserId: ctx.guardianUserId,
+    guardianState: ctx.guardianState,
+    account,
+  })
+
+  return {
+    ok: true,
+    status: {
+      holder: holderUserId === null ? null : holderUserId === providerUserId ? 'self' : 'guardian',
+      holderUserId,
+      stage: payoutStage(account),
+      requirementsDue: account.requirementsDue,
+      canReceivePayments: gate.allowed,
+      guardianState: ctx.guardianState,
+    },
+  }
 }

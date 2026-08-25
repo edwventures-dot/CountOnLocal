@@ -7,7 +7,7 @@ import {
   PROVIDER_FACING_GUARDIAN_BLOCK,
   type GuardianState,
   type GuardianEvent,
-} from '../guardian.js'
+} from '../guardian'
 
 const ALL_STATES: GuardianState[] = [
   'not_required',
