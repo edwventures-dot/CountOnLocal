@@ -15,6 +15,36 @@ export type UserRole =
   | 'finance_admin'
   | 'platform_admin'
 
+export type SubscriptionStateEnum =
+  | 'pending'
+  | 'active'
+  | 'paused'
+  | 'payment_failed'
+  | 'canceled'
+  | 'ended'
+
+export type OccurrenceStateEnum =
+  | 'scheduled'
+  | 'due_today'
+  | 'started'
+  | 'completed'
+  | 'settled'
+  | 'provider_skipped'
+  | 'customer_skipped'
+  | 'issue_reported'
+  | 'credited'
+  | 'canceled'
+
+export type LedgerKindEnum =
+  | 'customer_charge'
+  | 'platform_fee'
+  | 'provider_earning'
+  | 'credit'
+  | 'refund'
+  | 'dispute'
+  | 'payout'
+  | 'adjustment'
+
 export type BusinessStateEnum =
   | 'draft'
   | 'pending'
@@ -264,6 +294,145 @@ export type Database = {
           approved_by_user_id: string
         }
         Update: Partial<Database['public']['Tables']['guardian_service_approvals']['Insert']>
+        Relationships: []
+      }
+      customer_addresses: {
+        Row: {
+          id: string
+          customer_user_id: string
+          line1: string
+          line2: string | null
+          city: string
+          region: string
+          postal_code: string
+          country_code: string
+          normalized_address: string | null
+          geocoded_at: string | null
+          geocoder: string | null
+          access_notes: string | null
+        } & Timestamps
+        Insert: {
+          id?: string
+          customer_user_id: string
+          line1: string
+          line2?: string | null
+          city: string
+          region: string
+          postal_code: string
+          country_code?: string
+          normalized_address?: string | null
+          geocoded_at?: string | null
+          geocoder?: string | null
+          access_notes?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['customer_addresses']['Insert']>
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          id: string
+          customer_user_id: string
+          provider_service_id: string
+          service_address_id: string
+          state: SubscriptionStateEnum
+          provider_price_cents: number
+          price_unit: 'week' | 'visit' | 'month'
+          platform_fee_bps: number
+          platform_fee_min_cents: number
+          billing_cycle_weeks: number
+          current_cycle_start: string | null
+          current_cycle_end: string | null
+          next_charge_at: string | null
+          stripe_customer_id: string | null
+          stripe_payment_method_id: string | null
+          customer_instructions: string | null
+          started_at: string | null
+          canceled_at: string | null
+        } & Timestamps
+        Insert: {
+          id?: string
+          customer_user_id: string
+          provider_service_id: string
+          service_address_id: string
+          state?: SubscriptionStateEnum
+          provider_price_cents: number
+          price_unit: 'week' | 'visit' | 'month'
+          platform_fee_bps: number
+          platform_fee_min_cents: number
+          billing_cycle_weeks?: number
+          current_cycle_start?: string | null
+          current_cycle_end?: string | null
+          next_charge_at?: string | null
+          stripe_customer_id?: string | null
+          stripe_payment_method_id?: string | null
+          customer_instructions?: string | null
+          started_at?: string | null
+          canceled_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['subscriptions']['Insert']>
+        Relationships: []
+      }
+      service_occurrences: {
+        Row: {
+          id: string
+          subscription_id: string
+          service_date: string
+          local_timezone: string
+          service_window_start: string | null
+          service_window_end: string | null
+          state: OccurrenceStateEnum
+          route_order: number | null
+          service_value_cents: number
+          completion_note: string | null
+          completed_at: string | null
+        } & Timestamps
+        Insert: {
+          id?: string
+          subscription_id: string
+          service_date: string
+          local_timezone: string
+          service_window_start?: string | null
+          service_window_end?: string | null
+          state?: OccurrenceStateEnum
+          route_order?: number | null
+          service_value_cents: number
+          completion_note?: string | null
+          completed_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['service_occurrences']['Insert']>
+        Relationships: []
+      }
+      ledger_entries: {
+        Row: {
+          id: string
+          kind: LedgerKindEnum
+          amount_cents: number
+          currency: string
+          customer_user_id: string | null
+          provider_user_id: string | null
+          subscription_id: string | null
+          occurrence_id: string | null
+          external_processor: string | null
+          external_id: string | null
+          idempotency_key: string | null
+          memo: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          kind: LedgerKindEnum
+          amount_cents: number
+          currency?: string
+          customer_user_id?: string | null
+          provider_user_id?: string | null
+          subscription_id?: string | null
+          occurrence_id?: string | null
+          external_processor?: string | null
+          external_id?: string | null
+          idempotency_key?: string | null
+          memo?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['ledger_entries']['Insert']>
         Relationships: []
       }
       stripe_events: {
