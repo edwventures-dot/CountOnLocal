@@ -252,11 +252,11 @@ export type RevokeResult =
  * `db` must be the PRIVILEGED client, for the same reason as the other
  * mutations. Ownership is checked explicitly below rather than by policy.
  *
- * NOT YET WIRED: setting businesses.state to `paused_guardian`. The
- * businesses table arrives in build-sequence step 3; until it exists there
- * is nothing to pause. User-visible behaviour is already correct because
- * the gates deny publish and checkout, but the explicit paused_guardian
- * write must be added here when step 3 lands.
+ * Revocation also moves any live business to `paused_guardian`, which is
+ * what takes the public storefront down. The gates would already deny a new
+ * checkout, but leaving a published page up while quietly refusing every
+ * customer would be worse than removing it: neighbours would keep scanning
+ * a flyer that no longer works.
  */
 export async function revokeGuardianRelationship(args: {
   db: Db
@@ -300,6 +300,29 @@ export async function revokeGuardianRelationship(args: {
     .from('provider_profiles')
     .update({ guardian_state: result.to })
     .eq('user_id', rel.provider_user_id)
+
+  // Take the storefront down. Only live states are touched, so a draft the
+  // provider is still building is left alone -- SAFETY_TRUST_POLICY section
+  // 2 keeps drafting available in every guardian state.
+  const { data: paused } = await db
+    .from('businesses')
+    .update({ state: 'paused_guardian' })
+    .eq('provider_user_id', rel.provider_user_id)
+    .in('state', ['published', 'pending'])
+    .select('id')
+
+  for (const b of paused ?? []) {
+    await writeAudit({
+      actorUserId,
+      actorRole,
+      action: 'business.paused_guardian',
+      targetType: 'business',
+      targetId: b.id,
+      after: { state: 'paused_guardian' },
+      reasonCode: args.reasonCode ?? 'guardian_revoked',
+      ip: args.ip ?? null,
+    })
+  }
 
   await writeAudit({
     actorUserId,

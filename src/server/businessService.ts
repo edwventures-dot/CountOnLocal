@@ -403,3 +403,80 @@ export async function publishBusiness(args: {
 
   return { ok: true, slug: business.slug, publishedAt }
 }
+
+export const serviceAreaSchema = z.object({
+  /** GeoJSON polygon used for address eligibility. Never public. */
+  privateGeometry: z.record(z.string(), z.unknown()),
+  /** Coarse shape safe to publish. Optional; without it the map stays hidden. */
+  publicGeneralizedGeometry: z.record(z.string(), z.unknown()).optional(),
+  label: z.string().trim().max(80).optional(),
+})
+export type ServiceAreaInput = z.infer<typeof serviceAreaSchema>
+
+export type SetServiceAreaResult =
+  | { ok: true; serviceAreaId: string }
+  | { ok: false; code: 'SERVICE_NOT_FOUND' | 'WRITE_FAILED' }
+
+/**
+ * Stores the service area for one provider service.
+ *
+ * Ownership is checked by joining back to the business rather than trusting
+ * the id in the path -- a service id is guessable in a way a session is not.
+ *
+ * The private geometry is what address eligibility is computed against and
+ * is never returned to an unauthenticated caller. SAFETY_TRUST_POLICY
+ * section 3: for a minor, the shape of the area they serve is itself a
+ * location hint.
+ */
+export async function setServiceArea(args: {
+  db: Db
+  providerUserId: string
+  providerServiceId: string
+  input: ServiceAreaInput
+  now: Date
+  ip?: string | null
+}): Promise<SetServiceAreaResult> {
+  const { db, providerUserId, providerServiceId, input } = args
+
+  const { data: owned } = await db
+    .from('provider_services')
+    .select('id, business_id, businesses!inner(provider_user_id)')
+    .eq('id', providerServiceId)
+    .eq('businesses.provider_user_id', providerUserId)
+    .maybeSingle()
+
+  if (!owned) return { ok: false, code: 'SERVICE_NOT_FOUND' }
+
+  const { data: row, error } = await db
+    .from('service_areas')
+    .upsert(
+      {
+        provider_service_id: providerServiceId,
+        private_geometry: input.privateGeometry,
+        public_generalized_geometry: input.publicGeneralizedGeometry ?? null,
+        label: input.label ?? null,
+      },
+      { onConflict: 'provider_service_id' },
+    )
+    .select('id')
+    .single()
+
+  if (error || !row) {
+    console.error('[business] service area write failed', error?.message)
+    return { ok: false, code: 'WRITE_FAILED' }
+  }
+
+  await writeAudit({
+    actorUserId: providerUserId,
+    actorRole: 'provider',
+    action: 'service.area_set',
+    targetType: 'provider_service',
+    targetId: providerServiceId,
+    // The geometry itself is not recorded: an audit row should not become a
+    // second copy of a minor's service boundary.
+    after: { has_public_shape: input.publicGeneralizedGeometry !== undefined },
+    ip: args.ip ?? null,
+  })
+
+  return { ok: true, serviceAreaId: row.id }
+}
