@@ -32,7 +32,12 @@ export type AuditAction =
   | 'payout.onboarding_link_created'
   | 'payout.account_ready'
   | 'payout.requirements_due'
+  | 'business.created'
   | 'business.published'
+  | 'service.created'
+  | 'service.wording_refused'
+  | 'guardian.category_approved'
+  | 'guardian.category_revoked'
   | 'account.suspended'
   | 'role.granted'
 

@@ -15,6 +15,15 @@ export type UserRole =
   | 'finance_admin'
   | 'platform_admin'
 
+export type BusinessStateEnum =
+  | 'draft'
+  | 'pending'
+  | 'published'
+  | 'paused_guardian'
+  | 'paused_admin'
+  | 'suspended'
+  | 'closed'
+
 export type GuardianStateEnum =
   | 'not_required'
   | 'required_uninvited'
@@ -138,6 +147,123 @@ export type Database = {
           revoked_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['guardian_relationships']['Insert']>
+        Relationships: []
+      }
+      service_catalog: {
+        Row: {
+          id: string
+          code: string
+          name: string
+          description: string
+          risk_tier: 'A' | 'B' | 'C' | 'X'
+          min_provider_age: number
+          guardian_explicit_approval: boolean
+          active: boolean
+          configuration: Record<string, unknown>
+        } & Timestamps
+        Insert: Record<string, never>
+        Update: Record<string, never>
+        Relationships: []
+      }
+      businesses: {
+        Row: {
+          id: string
+          provider_user_id: string
+          name: string
+          slug: string
+          tagline: string | null
+          about: string | null
+          avatar_asset_id: string | null
+          state: BusinessStateEnum
+          public_area_label: string | null
+          published_at: string | null
+        } & Timestamps
+        Insert: {
+          id?: string
+          provider_user_id: string
+          name: string
+          slug: string
+          tagline?: string | null
+          about?: string | null
+          avatar_asset_id?: string | null
+          state?: BusinessStateEnum
+          public_area_label?: string | null
+          published_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['businesses']['Insert']>
+        Relationships: []
+      }
+      provider_services: {
+        Row: {
+          id: string
+          business_id: string
+          catalog_service_id: string
+          slug: string
+          public_name: string
+          description: string
+          price_cents: number
+          currency: string
+          price_unit: 'week' | 'visit' | 'month'
+          billing_cycle_weeks: number
+          schedule_rule: Record<string, unknown>
+          capacity_rule: Record<string, unknown>
+          provider_limits: Record<string, unknown>
+          state: 'draft' | 'active' | 'paused'
+        } & Timestamps
+        Insert: {
+          id?: string
+          business_id: string
+          catalog_service_id: string
+          slug: string
+          public_name: string
+          description: string
+          price_cents: number
+          currency?: string
+          price_unit: 'week' | 'visit' | 'month'
+          billing_cycle_weeks?: number
+          schedule_rule: Record<string, unknown>
+          capacity_rule: Record<string, unknown>
+          provider_limits?: Record<string, unknown>
+          state?: 'draft' | 'active' | 'paused'
+        }
+        Update: Partial<Database['public']['Tables']['provider_services']['Insert']>
+        Relationships: []
+      }
+      service_areas: {
+        Row: {
+          id: string
+          provider_service_id: string
+          private_geometry: Record<string, unknown>
+          public_generalized_geometry: Record<string, unknown> | null
+          label: string | null
+        } & Timestamps
+        Insert: {
+          id?: string
+          provider_service_id: string
+          private_geometry: Record<string, unknown>
+          public_generalized_geometry?: Record<string, unknown> | null
+          label?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['service_areas']['Insert']>
+        Relationships: []
+      }
+      guardian_service_approvals: {
+        Row: {
+          id: string
+          relationship_id: string
+          catalog_code: string
+          approved_at: string
+          revoked_at: string | null
+          approved_by_user_id: string
+        }
+        Insert: {
+          id?: string
+          relationship_id: string
+          catalog_code: string
+          revoked_at?: string | null
+          approved_by_user_id: string
+        }
+        Update: Partial<Database['public']['Tables']['guardian_service_approvals']['Insert']>
         Relationships: []
       }
       stripe_events: {
