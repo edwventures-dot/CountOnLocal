@@ -60,12 +60,15 @@ async function makeUser(email: string): Promise<TestUser> {
   })
   if (createErr || !created.user) throw new Error(`createUser failed: ${createErr?.message}`)
 
-  const { data: domainUser, error: insErr } = await admin
+  // Migration 0003 provisions public.users by trigger on auth signup, so we
+  // read the row rather than creating it -- which also proves the trigger
+  // actually fires.
+  const { data: domainUser, error: readErr } = await admin
     .from('users')
-    .insert({ email, auth_user_id: created.user.id, email_verified_at: new Date().toISOString() })
     .select('id')
+    .eq('auth_user_id', created.user.id)
     .single()
-  if (insErr || !domainUser) throw new Error(`users insert failed: ${insErr?.message}`)
+  if (readErr || !domainUser) throw new Error(`domain user not provisioned: ${readErr?.message}`)
 
   const anon = createClient<Database>(url, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },

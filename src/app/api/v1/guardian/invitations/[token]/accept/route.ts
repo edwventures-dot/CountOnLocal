@@ -23,6 +23,9 @@ export async function POST(
 
   const auth = await authenticate()
   if (!auth.ok) {
+    if (auth.code === 'NO_DOMAIN_USER') {
+      return apiError('ACCOUNT_NOT_PROVISIONED', 'This account needs review. Please contact support.', 409, { requestId })
+    }
     return apiError('UNAUTHENTICATED', 'Sign in to accept this invitation.', 401, { requestId })
   }
 
