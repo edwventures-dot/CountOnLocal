@@ -25,16 +25,15 @@
  *
  * ## The QR code
  *
- * Not generated here yet. Encoding one correctly means Reed-Solomon over
- * GF(256), eight mask patterns with penalty scoring, and format and version
- * bits -- and a subtly wrong mask produces a flyer that looks right and
- * does not scan, which nobody discovers until it is on fifty doors. That is
- * a job for a maintained library rather than a hand-rolled encoder with no
- * way to verify it against a real scanner.
+ * Generated in src/server/qr.ts, which is the only file that knows the
+ * encoder exists. Passed in as a data URI rather than produced here, so
+ * this module stays a pure string-builder that a test can exercise without
+ * touching an encoder.
  *
- * So the flyer renders the URL in large type and leaves a marked slot.
- * Adding an encoder is a one-line change at `qrMarkup` once the dependency
- * is agreed.
+ * When one is not supplied -- generation failed, or a caller did not ask
+ * for one -- the slot renders a labelled placeholder saying so, rather than
+ * a decorative square somebody might print believing it works. The URL is
+ * printed as text beside it either way.
  */
 
 import { socialProof, type SocialProof } from '@/domain/density'
@@ -55,7 +54,7 @@ export type FlyerInput = {
   headline?: string | undefined
   /** Optional, and withheld below the privacy threshold. */
   activeCustomers?: number | undefined
-  /** Data URI for the QR image, once an encoder exists. */
+  /** SVG data URI for the QR image. See src/server/qr.ts. */
   qrDataUri?: string | undefined
 }
 

@@ -21,6 +21,7 @@ import { renderFlyerSheet } from '@/server/flyerService'
 import { getGrowDashboard } from '@/server/growService'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { formatCents } from '@/domain/money'
+import { qrSvgDataUri } from '@/server/qr'
 import { apiError, newRequestId } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
@@ -70,6 +71,15 @@ export async function GET(request: Request): Promise<Response> {
     .eq('slug', result.dashboard.storefrontUrl.split('/').pop() ?? '')
     .maybeSingle()
 
+  // Encodes the share URL, so a scanned flyer is attributed to the code on
+  // it. A failure is not fatal -- the URL is printed as text beside the
+  // slot, and a flyer without a code still works.
+  const shareTarget = result.dashboard.shareUrl
+  const qr = await qrSvgDataUri(shareTarget)
+  if (!qr.ok) {
+    console.error('[flyer] qr generation failed', { requestId, message: qr.message })
+  }
+
   const html = renderFlyerSheet(
     {
       businessName: result.dashboard.businessName,
@@ -78,7 +88,8 @@ export async function GET(request: Request): Promise<Response> {
       priceUnit: row ? `/${row.price_unit}` : '',
       areaLabel: biz?.public_area_label ?? null,
       // The share URL, so a flyer that gets scanned is attributed.
-      storefrontUrl: result.dashboard.shareUrl,
+      storefrontUrl: shareTarget,
+      ...(qr.ok ? { qrDataUri: qr.dataUri } : {}),
       // Withheld below the privacy threshold by socialProof(); passing the
       // real count is safe because the domain decides whether it is shown.
       activeCustomers: service.density.activeCustomers,

@@ -66,3 +66,6 @@ private/
 
 # ---- Node ----
 node_modules/
+
+# Locally generated flyer samples
+flyer-sample*.html
