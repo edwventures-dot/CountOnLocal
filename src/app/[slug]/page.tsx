@@ -16,6 +16,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { publicEnv } from '@/lib/env'
 import { AddressCheck } from './AddressCheck'
+import { publicRating } from '@/domain/review'
 import type { Database } from '@/lib/supabase/types'
 
 export const revalidate = 300
@@ -45,7 +46,26 @@ async function loadStorefront(slug: string) {
     .select('id, slug, public_name, description, price_cents, price_unit, billing_cycle_weeks, schedule_rule, capacity_rule')
     .eq('business_id', business.id)
 
-  return { business, services: services ?? [] }
+  // Published reviews for every service on the page, in one query rather
+  // than one per card. Read through the anon client like everything else
+  // here: reviews_read_published is what decides a hidden review stays
+  // hidden, not this file.
+  const serviceIds = (services ?? []).map((s) => s.id)
+  const { data: reviewRows } = serviceIds.length
+    ? await db
+        .from('reviews')
+        .select('provider_service_id, rating')
+        .in('provider_service_id', serviceIds)
+    : { data: [] as Array<{ provider_service_id: string; rating: number }> }
+
+  const ratingsByService = new Map<string, number[]>()
+  for (const r of reviewRows ?? []) {
+    const list = ratingsByService.get(r.provider_service_id) ?? []
+    list.push(r.rating)
+    ratingsByService.set(r.provider_service_id, list)
+  }
+
+  return { business, services: services ?? [], ratingsByService }
 }
 
 /** Integer cents to a display string. Formatting happens only here. */
@@ -95,7 +115,7 @@ export default async function Storefront({ params }: Params) {
   // answer publicly. A paused page should not announce that it is paused.
   if (!data) notFound()
 
-  const { business, services } = data
+  const { business, services, ratingsByService } = data
 
   return (
     <main style={S.page}>
@@ -130,6 +150,7 @@ export default async function Storefront({ params }: Params) {
           services.map((s) => {
             const cadence = cadenceLine(s.price_cents, s.price_unit, s.billing_cycle_weeks)
             const schedule = scheduleLine(s.schedule_rule ?? {})
+            const rating = publicRating({ ratings: ratingsByService.get(s.id) ?? [] })
             return (
               <section key={s.id} style={S.card}>
                 <div style={S.cardTop}>
@@ -137,6 +158,18 @@ export default async function Storefront({ params }: Params) {
                     {schedule ? <p style={S.mini}>{schedule.toUpperCase()}</p> : null}
                     <h2 style={S.serviceName}>{s.public_name}</h2>
                     <p style={S.muted}>{s.description}</p>
+                    {/*
+                      PRD 19: no score at all below the threshold -- not a
+                      rounded one, not a provisional one. A "5.0 from 1
+                      review" on a named minor's page is the thing the rule
+                      exists to prevent, and a small count beside it does
+                      not undo that. The honest label goes there instead.
+                    */}
+                    <p style={S.rating}>
+                      {rating.visible
+                        ? `${rating.average.toFixed(1)} from ${rating.count} review${rating.count === 1 ? '' : 's'}`
+                        : rating.label}
+                    </p>
                   </div>
                   <div style={S.priceBlock}>
                     <span style={S.price}>{formatMoney(s.price_cents)}</span>
@@ -206,6 +239,7 @@ const S: Record<string, React.CSSProperties> = {
   title: { fontSize: 40, letterSpacing: '-.03em', margin: '6px 0' },
   tagline: { fontSize: 18, color: MUTED, margin: '6px 0' },
   badges: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 },
+  rating: { fontSize: 13, fontWeight: 700, color: MUTED, margin: '8px 0 0' },
   badge: { borderRadius: 999, padding: '6px 10px', background: '#eef2f3', fontSize: 12, fontWeight: 800 },
   badgeGreen: { borderRadius: 999, padding: '6px 10px', background: '#e7f6ef', color: GREEN, fontSize: 12, fontWeight: 800 },
   card: {

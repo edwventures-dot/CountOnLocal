@@ -17,6 +17,8 @@ export type UserRole =
 
 export type WaitlistRoleEnum = 'provider' | 'customer' | 'guardian'
 
+export type ReviewStateEnum = 'published' | 'hidden' | 'removed'
+
 export type NotificationChannelEnum = 'email' | 'sms' | 'push'
 
 export type NotificationStateEnum =
@@ -496,6 +498,61 @@ export type Database = {
           ip_hash?: string | null
         }
         Update: Partial<Database['public']['Tables']['audit_log']['Insert']>
+        Relationships: []
+      }
+      reviews: {
+        Row: {
+          id: string
+          occurrence_id: string
+          subscription_id: string
+          provider_service_id: string
+          provider_user_id: string
+          customer_user_id: string
+          rating: number
+          body: string | null
+          response_body: string | null
+          responded_at: string | null
+          state: ReviewStateEnum
+          cycle_start: string | null
+        } & Timestamps
+        Insert: {
+          id?: string
+          occurrence_id: string
+          subscription_id: string
+          provider_service_id: string
+          provider_user_id: string
+          customer_user_id: string
+          rating: number
+          body?: string | null
+          response_body?: string | null
+          responded_at?: string | null
+          state?: ReviewStateEnum
+          cycle_start?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['reviews']['Insert']>
+        Relationships: []
+      }
+      review_reports: {
+        Row: {
+          id: string
+          review_id: string
+          reporter_user_id: string
+          reason: string
+          detail: string | null
+          resolved_at: string | null
+          resolution: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          review_id: string
+          reporter_user_id: string
+          reason: string
+          detail?: string | null
+          resolved_at?: string | null
+          resolution?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['review_reports']['Insert']>
         Relationships: []
       }
       notifications: {
