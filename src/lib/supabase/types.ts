@@ -500,6 +500,21 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['audit_log']['Insert']>
         Relationships: []
       }
+      referral_codes: {
+        Row: {
+          code: string
+          provider_user_id: string
+          revoked_at: string | null
+          created_at: string
+        }
+        Insert: {
+          code: string
+          provider_user_id: string
+          revoked_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['referral_codes']['Insert']>
+        Relationships: []
+      }
       reviews: {
         Row: {
           id: string
