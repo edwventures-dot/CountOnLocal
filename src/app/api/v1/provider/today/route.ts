@@ -14,6 +14,11 @@
  * in, because a customer can legitimately read the same occurrence rows and
  * would otherwise get their own visits back dressed up as a route.
  *
+ * API_CONTRACT: "For minor provider, this endpoint requires valid guardian
+ * state." A revoked or expired relationship means no route -- the addresses
+ * on it are exactly what a guardian revocation is meant to withdraw access
+ * to, and handing them over anyway would make the revocation cosmetic.
+ *
  * Never cached. A route changes as stops are completed, and it contains a
  * customer's address and gate code.
  */
@@ -21,6 +26,9 @@
 import { authenticate } from '@/server/auth'
 import { getTodayRoute } from '@/server/routeService'
 import { hasPermission } from '@/domain/roles'
+import { loadProviderGateContext } from '@/server/providerGate'
+import { canRunRoute } from '@/domain/gates'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
 import type { TravelMode } from '@/domain/route'
@@ -47,6 +55,31 @@ export async function GET(request: Request): Promise<Response> {
   const modeParam = url.searchParams.get('travelMode')
   const travelMode: TravelMode | undefined =
     modeParam && TRAVEL_MODES.includes(modeParam) ? (modeParam as TravelMode) : undefined
+
+  // Gate on guardian state before any address is read. Uses the privileged
+  // client only to read the provider's own profile -- the route itself is
+  // still read through the caller's session so RLS applies.
+  const gateContext = await loadProviderGateContext({
+    db: supabaseAdmin(),
+    providerUserId: auth.auth.userId,
+    roles: auth.auth.roles,
+    now: new Date(),
+  })
+  if (!gateContext) {
+    return apiError('NOT_A_PROVIDER', 'This account does not run a route.', 403, { requestId })
+  }
+
+  const gate = canRunRoute(gateContext)
+  if (!gate.allowed) {
+    return apiError(
+      gate.code,
+      gate.code === 'GUARDIAN_APPROVAL_REQUIRED'
+        ? 'Guardian approval is required to continue.'
+        : 'This account cannot run a route.',
+      403,
+      { requestId },
+    )
+  }
 
   const db = await createSupabaseServerClient()
 

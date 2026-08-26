@@ -106,6 +106,30 @@ export function canContinueRecurringCharges(ctx: ProviderGateContext): GateDecis
   return { allowed: true }
 }
 
+/**
+ * May this provider run their route -- complete stops, skip stops?
+ *
+ * Shares its capability with canContinueRecurringCharges rather than having
+ * one of its own, and the reason is worth stating. SAFETY_TRUST_POLICY
+ * section 2 says that on revocation future charges stop and already-paid
+ * pending occurrences are "surfaced to support/guardian for safe
+ * resolution". Those are one situation, not two: work that may no longer be
+ * charged for is also work a minor should not be quietly carrying on with
+ * unsupervised. Letting a revoked provider keep completing stops would
+ * accrue exactly the obligations the revocation was meant to stop.
+ *
+ * A separate flag would let the two drift apart, and the drift would be
+ * silent.
+ */
+export function canRunRoute(ctx: ProviderGateContext): GateDecision {
+  const base = baseProviderChecks(ctx)
+  if (!base.allowed) return base
+  if (!guardianCapabilities(ctx.guardianState).canContinueRecurringCharges) {
+    return { allowed: false, code: 'GUARDIAN_APPROVAL_REQUIRED' }
+  }
+  return { allowed: true }
+}
+
 /** Drafting is always allowed for an eligible provider, cleared or not. */
 export function canDraftBusiness(ctx: ProviderGateContext): GateDecision {
   return baseProviderChecks(ctx)
