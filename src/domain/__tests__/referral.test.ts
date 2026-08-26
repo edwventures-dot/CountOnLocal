@@ -4,9 +4,10 @@ import {
   customerDiscountCents,
   DEFAULT_PROVIDER_BONUS_CENTS,
   DEFAULT_REFERRAL_TERMS,
-  providerBonusEntries,
+  discountQuote,
   referralQualifies,
 } from '../referral'
+import { referralBonusEntries, sumCents } from '../ledger'
 import { DEFAULT_FEE, quoteCycle } from '../money'
 
 /** PRD section 12's worked example: $3/week, 4 weeks, 15% fee. */
@@ -45,17 +46,17 @@ describe('the provider never pays for the promotion', () => {
   })
 
   it('increases what the provider is owed when a bonus is paid', () => {
-    const entries = providerBonusEntries({ bonusCents: 500 })
+    const entries = referralBonusEntries({ bonusCents: 500, providerUserId: 'p_1', referralId: 'r_1' })
     const earning = entries.find((e) => e.kind === 'provider_earning')
     // Negative is money owed out, in the platform's sign convention.
     expect(earning!.amountCents).toBe(-500)
   })
 
   it('takes that bonus out of platform revenue, not the provider price', () => {
-    const entries = providerBonusEntries({ bonusCents: 500 })
+    const entries = referralBonusEntries({ bonusCents: 500, providerUserId: 'p_1', referralId: 'r_1' })
     const fee = entries.find((e) => e.kind === 'platform_fee')
     expect(fee!.amountCents).toBe(500)
-    expect(entries.reduce((a, e) => a + e.amountCents, 0)).toBe(0)
+    expect(sumCents(entries)).toBe(0)
   })
 })
 
@@ -116,15 +117,15 @@ describe('the provider bonus', () => {
   })
 
   it('writes nothing for a zero bonus rather than two empty rows', () => {
-    expect(providerBonusEntries({ bonusCents: 0 })).toEqual([])
+    expect(referralBonusEntries({ bonusCents: 0, providerUserId: 'p_1', referralId: 'r_1' })).toEqual([])
   })
 
   it('refuses a negative bonus', () => {
-    expect(() => providerBonusEntries({ bonusCents: -100 })).toThrow(RangeError)
+    expect(() => referralBonusEntries({ bonusCents: -100, providerUserId: 'p_1', referralId: 'r_1' })).toThrow(RangeError)
   })
 
   it('refuses fractional cents', () => {
-    expect(() => providerBonusEntries({ bonusCents: 12.5 })).toThrow(RangeError)
+    expect(() => referralBonusEntries({ bonusCents: 12.5, providerUserId: 'p_1', referralId: 'r_1' })).toThrow(TypeError)
   })
 })
 
@@ -146,7 +147,7 @@ describe('qualifying', () => {
 describe('the platform can lose money on a referral, and that is allowed', () => {
   it('lets a discount plus a bonus exceed the fee', () => {
     const discounted = applyCustomerDiscount({ quote: QUOTE })
-    const bonus = providerBonusEntries({ bonusCents: 500 })
+    const bonus = referralBonusEntries({ bonusCents: 500, providerUserId: 'p_1', referralId: 'r_1' })
 
     // Fee revenue after both: 0 from the discounted cycle, less 500 given
     // up as the bonus.
@@ -161,5 +162,76 @@ describe('the platform can lose money on a referral, and that is allowed', () =>
   it('still never reduces the provider earning below the listed price', () => {
     const discounted = applyCustomerDiscount({ quote: QUOTE })
     expect(discounted.serviceSubtotalCents).toBe(1200)
+  })
+})
+
+describe('discountQuote', () => {
+  it('still decomposes, so chargeEntries will accept it', () => {
+    // chargeEntries refuses a quote where total != subtotal + fee. That
+    // check is the reason this returns a real quote rather than a summary.
+    const { quote } = discountQuote({ quote: QUOTE })
+    expect(quote.customerTotalCents).toBe(quote.serviceSubtotalCents + quote.platformFeeCents)
+  })
+
+  it('leaves the provider earning alone', () => {
+    const { quote } = discountQuote({ quote: QUOTE })
+    expect(quote.providerEarningCents).toBe(QUOTE.providerEarningCents)
+    expect(quote.serviceSubtotalCents).toBe(QUOTE.serviceSubtotalCents)
+  })
+
+  it('returns the original object untouched at a zero discount', () => {
+    const result = discountQuote({
+      quote: QUOTE,
+      terms: { customerDiscountBps: 0, providerBonusCents: 0 },
+    })
+    expect(result.quote).toBe(QUOTE)
+    expect(result.discountCents).toBe(0)
+  })
+
+  it('recomputes the effective rate rather than reporting the old one', () => {
+    const { quote } = discountQuote({
+      quote: QUOTE,
+      terms: { customerDiscountBps: 5000, providerBonusCents: 0 },
+    })
+    // 90 of 1200 is 750bp, not the 1500bp that was charged before.
+    expect(quote.effectiveFeeBasisPoints).toBe(750)
+  })
+
+  it('stops claiming the minimum applied on a cycle taken below it', () => {
+    const small = quoteCycle({ priceCents: 100, priceUnit: 'week', billingCycleWeeks: 1 })
+    expect(small.minimumApplied).toBe(true)
+    const { quote } = discountQuote({ quote: small })
+    // The floor did not decide this fee; the promotion did.
+    expect(quote.minimumApplied).toBe(false)
+  })
+})
+
+describe('the bonus is not attached to a subscription', () => {
+  it('carries the provider but no subscription id', () => {
+    // The referring provider is usually not the provider on the referred
+    // subscription. Attaching it there would break that subscription's
+    // per-subscription zero for a movement unrelated to it.
+    const entries = referralBonusEntries({
+      bonusCents: 500,
+      providerUserId: 'p_1',
+      referralId: 'r_1',
+    })
+    for (const e of entries) {
+      expect(e.providerUserId).toBe('p_1')
+      expect(e.subscriptionId).toBeUndefined()
+      expect(e.customerUserId).toBeUndefined()
+    }
+  })
+
+  it('keys the payout so it cannot be paid twice', () => {
+    const entries = referralBonusEntries({
+      bonusCents: 500,
+      providerUserId: 'p_1',
+      referralId: 'r_1',
+    })
+    const keyed = entries.filter((e) => e.idempotencyKey !== undefined)
+    // Exactly one, as with a cycle charge: the column is unique table-wide.
+    expect(keyed).toHaveLength(1)
+    expect(keyed[0]!.idempotencyKey).toBe('referral_bonus:r_1')
   })
 })

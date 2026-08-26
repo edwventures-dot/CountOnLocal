@@ -29,6 +29,13 @@ const TABLES = [
   'guardian_relationships',
   'audit_log',
   'waitlist_signups',
+  // A referral names the customer who used a provider's code. On this
+  // platform the reader is often a minor and the subject is their
+  // neighbour, so an anonymous read here would be a way to learn that a
+  // specific household signed up.
+  'referrals',
+  'referral_codes',
+  'ledger_entries',
 ]
 
 let passed = 0

@@ -92,48 +92,6 @@ export function referralQualifies(args: {
   return args.cycleWasCharged && args.deliveredOccurrences >= 1
 }
 
-export type ReferralLedgerEntry = {
-  kind: 'platform_fee' | 'provider_earning' | 'adjustment'
-  amountCents: number
-  memo: string
-}
-
-/**
- * The entries that pay a referring provider their bonus.
- *
- * Two, netting to zero:
- *
- *     provider_earning  -500   the platform now owes the provider this
- *     platform_fee      +500   and gives up that much of its own revenue
- *
- * The sign convention is the platform's, as everywhere in the ledger: a
- * negative provider_earning is money owed out. Note the provider's earnings
- * go UP by the bonus while the platform's fee revenue goes DOWN by the same
- * amount -- which is what "platform-fee-sponsored" means in entries rather
- * than in prose.
- */
-export function providerBonusEntries(args: {
-  bonusCents: number
-}): ReferralLedgerEntry[] {
-  if (!Number.isInteger(args.bonusCents) || args.bonusCents < 0) {
-    throw new RangeError('bonusCents must be a non-negative integer')
-  }
-  if (args.bonusCents === 0) return []
-
-  return [
-    {
-      kind: 'provider_earning',
-      amountCents: -args.bonusCents,
-      memo: 'Referral bonus, funded from the platform fee',
-    },
-    {
-      kind: 'platform_fee',
-      amountCents: args.bonusCents,
-      memo: 'Referral bonus given up from fee revenue',
-    },
-  ]
-}
-
 export type DiscountedQuote = {
   /** Unchanged. The provider keeps the listed price. */
   serviceSubtotalCents: number
@@ -162,5 +120,45 @@ export function applyCustomerDiscount(args: {
     platformFeeCents: args.quote.platformFeeCents - discountCents,
     customerTotalCents: args.quote.customerTotalCents - discountCents,
     discountCents,
+  }
+}
+
+/**
+ * The same discount, expressed as a CycleQuote settlement can charge.
+ *
+ * Settlement builds its ledger entries from a quote, and chargeEntries
+ * refuses a quote that does not decompose. Returning a real quote rather
+ * than a summary means the discount flows through the existing charge path
+ * with no second place where a fee is recalculated -- which is the property
+ * that keeps the ledger from drifting away from what the customer was
+ * shown.
+ */
+export function discountQuote(args: {
+  quote: CycleQuote
+  terms?: ReferralTerms | undefined
+}): { quote: CycleQuote; discountCents: number } {
+  const discountCents = customerDiscountCents(args)
+  if (discountCents === 0) return { quote: args.quote, discountCents: 0 }
+
+  const platformFeeCents = args.quote.platformFeeCents - discountCents
+
+  return {
+    discountCents,
+    quote: {
+      ...args.quote,
+      platformFeeCents,
+      customerTotalCents: args.quote.customerTotalCents - discountCents,
+      // Untouched, and named here so a future edit has to notice it.
+      serviceSubtotalCents: args.quote.serviceSubtotalCents,
+      providerEarningCents: args.quote.providerEarningCents,
+      effectiveFeeBasisPoints:
+        args.quote.serviceSubtotalCents === 0
+          ? 0
+          : roundHalfUp(platformFeeCents * 10_000, args.quote.serviceSubtotalCents),
+      // The floor did not decide this fee; the promotion did. Reporting it
+      // as still applied would tell a reconciler the minimum was honoured
+      // on a cycle that was deliberately taken below it.
+      minimumApplied: false,
+    },
   }
 }

@@ -47,6 +47,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { extendHorizon, promoteDueToday } from '@/server/occurrenceJobs'
 import { runSettlement } from '@/server/settlementService'
+import { runReferralRewards } from '@/server/referralService'
 import { dispatchNotifications } from '@/server/notifications'
 import { purgeExpiredMessages } from '@/server/messageService'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -56,9 +57,22 @@ export const dynamic = 'force-dynamic'
 /** Settlement talks to a payment processor; give it room. */
 export const maxDuration = 300
 
-type JobName = 'extend-horizon' | 'due-today' | 'settle' | 'notify' | 'purge-messages'
+type JobName =
+  | 'extend-horizon'
+  | 'due-today'
+  | 'settle'
+  | 'referral-rewards'
+  | 'notify'
+  | 'purge-messages'
 
-const JOBS: readonly JobName[] = ['extend-horizon', 'due-today', 'settle', 'notify', 'purge-messages']
+const JOBS: readonly JobName[] = [
+  'extend-horizon',
+  'due-today',
+  'settle',
+  'referral-rewards',
+  'notify',
+  'purge-messages',
+]
 
 function authorized(request: Request): boolean {
   const secret = process.env['CRON_SECRET']
@@ -119,6 +133,11 @@ export async function GET(request: Request): Promise<Response> {
   await run('extend-horizon', () => extendHorizon({ db, now }))
   await run('due-today', () => promoteDueToday({ db, now }))
   await run('settle', () => runSettlement({ db, now }))
+  // After settlement, because qualifying reads the ledger for whether the
+  // cycle was actually charged. Running it first would leave every referral
+  // waiting an extra four hours for a charge that had already happened by
+  // the time anyone looked.
+  await run('referral-rewards', () => runReferralRewards({ db, now }))
   // Last, so anything the earlier jobs queued goes out in the same run
   // rather than waiting four hours.
   await run('notify', () => dispatchNotifications({ db, now }))

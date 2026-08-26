@@ -25,6 +25,8 @@ import { parsePlainDate, type PlainDate } from '@/domain/age'
 import { checkAddressEligibility, type AddressFields } from '@/server/eligibility'
 import { todayUtc } from '@/server/providerOnboarding'
 import { writeAudit } from '@/server/audit'
+import { attachReferral } from '@/server/referralService'
+import { DEFAULT_REFERRAL_TERMS } from '@/domain/referral'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
@@ -215,11 +217,28 @@ export async function previewCheckout(args: {
 
 export const createSubscriptionSchema = previewSchema.extend({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  /**
+   * UX_UI_SPEC section 13. Optional, and a bad one never fails the
+   * checkout -- see attachReferral. Length is checked but the alphabet is
+   * not, because rejecting on shape here would turn a typo into a
+   * validation error on a form field the customer cannot fix by retyping
+   * the code they were actually given.
+   */
+  referralCode: z.string().trim().min(1).max(16).optional(),
   customerInstructions: z.string().trim().max(500).optional(),
   /** PRD section 6: customers attest to being 18+ in V1. */
   adultAttestation: z.literal(true),
 })
 export type CreateSubscriptionInput = z.infer<typeof createSubscriptionSchema>
+
+export type ReferralOutcome =
+  | { applied: true; discountBps: number }
+  /**
+   * Surfaced rather than swallowed. A customer who typed a code and is
+   * charged full price with no explanation has been quietly overcharged as
+   * far as they are concerned.
+   */
+  | { applied: false; reason: string }
 
 export type CreateSubscriptionResult =
   | {
@@ -229,6 +248,8 @@ export type CreateSubscriptionResult =
       startDate: string
       quote: CycleQuote
       occurrenceCount: number
+      /** Absent when no code was supplied. */
+      referral?: ReferralOutcome
     }
   | {
       ok: false
@@ -426,6 +447,34 @@ export async function createSubscription(args: {
     ip: args.ip ?? null,
   })
 
+  // After the subscription exists, because a referral points at one. A
+  // failure here does not undo the subscription: the customer has bought
+  // the service either way, and the reward is the part that is optional.
+  let referral: ReferralOutcome | undefined
+  if (input.referralCode) {
+    const attached = await attachReferral({
+      db,
+      subscriptionId: subscription.id,
+      customerUserId,
+      code: input.referralCode,
+    })
+
+    if (attached.applied) {
+      referral = { applied: true, discountBps: DEFAULT_REFERRAL_TERMS.customerDiscountBps }
+      await writeAudit({
+        actorUserId: customerUserId,
+        actorRole: 'customer',
+        action: 'referral.attached',
+        targetType: 'subscription',
+        targetId: subscription.id,
+        after: { referral_id: attached.referralId },
+        ip: args.ip ?? null,
+      })
+    } else {
+      referral = { applied: false, reason: attached.reason }
+    }
+  }
+
   return {
     ok: true,
     subscriptionId: subscription.id,
@@ -433,5 +482,6 @@ export async function createSubscription(args: {
     startDate,
     quote: preview.preview.quote,
     occurrenceCount: scheduled.length,
+    ...(referral ? { referral } : {}),
   }
 }

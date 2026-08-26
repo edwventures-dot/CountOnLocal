@@ -67,6 +67,9 @@ export type AuditAction =
   | 'guardian.category_revoked'
   | 'account.suspended'
   | 'role.granted'
+  | 'referral.attached'
+  | 'referral.bonus_paid'
+  | 'referral.voided'
 
 /** Fields that must never appear in an audit snapshot. */
 const REDACTED_KEYS = new Set([

@@ -339,3 +339,68 @@ export function platformRevenueCents(entries: readonly LedgerEntry[]): number {
 export function cycleChargeKey(args: { subscriptionId: string; cycleStartIso: string }): string {
   return `charge:${args.subscriptionId}:${args.cycleStartIso}`
 }
+
+/**
+ * The entries that pay a referring provider their bonus.
+ *
+ * Two, netting to zero:
+ *
+ *     provider_earning  -500   the platform now owes the provider this
+ *     platform_fee      +500   and gives up that much of its own revenue
+ *
+ * Read the signs against the header's convention. A negative
+ * provider_earning is money owed out, so the provider's balance goes UP by
+ * the bonus; a positive platform_fee reduces what the platform has kept.
+ * That is what UX_UI_SPEC section 13's "platform-fee-sponsored" means
+ * expressed in rows rather than in prose, and it is the reason this pair
+ * cannot quietly become a deduction from the provider's price.
+ *
+ * No subscriptionId. The bonus is owed to the referring provider, who is
+ * usually not the provider on the referred subscription -- attaching it
+ * there would break that subscription's per-subscription zero for a
+ * movement that has nothing to do with it. Like a payout, it belongs to the
+ * provider's balance and not to any one customer's books.
+ */
+export function referralBonusEntries(args: {
+  bonusCents: number
+  providerUserId: string
+  /** The referral being paid out, for tracing. Not a subscription link. */
+  referralId: string
+  currency?: string
+}): LedgerEntry[] {
+  assertWholeCents('bonusCents', args.bonusCents)
+  if (args.bonusCents < 0) throw new RangeError('bonusCents cannot be negative')
+  if (args.bonusCents === 0) return []
+
+  const common = {
+    currency: args.currency ?? 'USD',
+    providerUserId: args.providerUserId,
+  }
+
+  return [
+    {
+      ...common,
+      kind: 'provider_earning' as const,
+      amountCents: -args.bonusCents,
+      idempotencyKey: referralBonusKey({ referralId: args.referralId }),
+      memo: 'Referral bonus, funded from the platform fee',
+    },
+    {
+      ...common,
+      kind: 'platform_fee' as const,
+      amountCents: args.bonusCents,
+      memo: 'Referral bonus given up from fee revenue',
+    },
+  ]
+}
+
+/**
+ * Idempotency key for a referral bonus.
+ *
+ * One per referral, ever. A referral that somehow qualified twice, or a job
+ * that ran twice on the same row, hits the unique index instead of paying a
+ * provider twice.
+ */
+export function referralBonusKey(args: { referralId: string }): string {
+  return `referral_bonus:${args.referralId}`
+}

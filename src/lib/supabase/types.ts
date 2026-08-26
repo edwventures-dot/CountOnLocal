@@ -19,6 +19,8 @@ export type WaitlistRoleEnum = 'provider' | 'customer' | 'guardian'
 
 export type ReviewStateEnum = 'published' | 'hidden' | 'removed'
 
+export type ReferralStateEnum = 'pending' | 'qualified' | 'paid' | 'void'
+
 export type MessageStateEnum = 'delivered' | 'blocked' | 'redacted'
 
 export type IncidentStateEnum = 'open' | 'investigating' | 'resolved' | 'closed'
@@ -637,6 +639,43 @@ export type Database = {
           revoked_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['referral_codes']['Insert']>
+        Relationships: []
+      }
+      referrals: {
+        Row: {
+          id: string
+          subscription_id: string
+          code: string
+          provider_user_id: string
+          customer_user_id: string
+          state: ReferralStateEnum
+          customer_discount_bps: number
+          provider_bonus_cents: number
+          discount_applied_cents: number | null
+          discount_applied_at: string | null
+          qualified_at: string | null
+          paid_at: string | null
+          voided_at: string | null
+          void_reason: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          subscription_id: string
+          code: string
+          provider_user_id: string
+          customer_user_id: string
+          state?: ReferralStateEnum
+          customer_discount_bps: number
+          provider_bonus_cents: number
+          discount_applied_cents?: number | null
+          discount_applied_at?: string | null
+          qualified_at?: string | null
+          paid_at?: string | null
+          voided_at?: string | null
+          void_reason?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['referrals']['Insert']>
         Relationships: []
       }
       reviews: {

@@ -52,6 +52,7 @@ import { civilDateIn } from '@/server/occurrenceJobs'
 import { parseServiceDate } from '@/server/occurrenceService'
 import { writeBalancedEntries } from '@/server/ledgerWriter'
 import { getCharger } from '@/server/charger'
+import { markDiscountSpent, quoteWithReferral } from '@/server/referralService'
 import { writeAudit } from '@/server/audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
@@ -192,10 +193,35 @@ export async function settleSubscription(args: {
     cycleStartIso: isoDate(plan.nextCycleStart),
   })
 
+  // --- 1b. Referral discount ----------------------------------------------
+  //
+  // Applied to the first charge this subscription ever receives, whichever
+  // path makes it. `quoteWithReferral` returns the quote unchanged when
+  // there is nothing unspent, so the rest of settlement does not branch.
+  //
+  // Nothing is marked spent yet. A discount recorded against a charge that
+  // then declines would quietly cost the customer their reward, and the
+  // re-run would find nothing left to apply.
+  //
+  // Held back on a cycle that cannot absorb it. A cycle already covered by
+  // standing credit charges nothing, and spending a first-cycle reward on a
+  // charge of zero would give the customer nothing while marking the reward
+  // used. It also keeps chargeEntries' own guard satisfied: credit can
+  // never exceed a customer total this has shrunk.
+  const referral =
+    plan.amountToChargeCents > 0
+      ? await quoteWithReferral({ db, subscriptionId: row.id, quote: plan.quote })
+      : { quote: plan.quote, discountCents: 0 as const, referralId: null }
+
+  const affordable = referral.referralId !== null && referral.discountCents <= plan.amountToChargeCents
+  const quote = affordable ? referral.quote : plan.quote
+  const discountCents = affordable ? referral.discountCents : 0
+  const amountToChargeCents = plan.amountToChargeCents - discountCents
+
   // --- 2. Charge -----------------------------------------------------------
   let externalId: string | null = null
 
-  if (plan.amountToChargeCents > 0) {
+  if (amountToChargeCents > 0) {
     if (!row.stripe_customer_id || !row.stripe_payment_method_id) {
       return {
         ok: false,
@@ -207,7 +233,7 @@ export async function settleSubscription(args: {
     }
 
     const charge = await getCharger().charge({
-      amountCents: plan.amountToChargeCents,
+      amountCents: amountToChargeCents,
       currency: 'USD',
       customerRef: row.stripe_customer_id,
       paymentMethodRef: row.stripe_payment_method_id,
@@ -224,7 +250,7 @@ export async function settleSubscription(args: {
           action: 'subscription.payment_failed',
           targetType: 'subscription',
           targetId: row.id,
-          after: { amount_cents: plan.amountToChargeCents },
+          after: { amount_cents: amountToChargeCents },
           reasonCode: 'card_declined',
         })
       }
@@ -242,7 +268,7 @@ export async function settleSubscription(args: {
 
   // --- 3. Ledger -----------------------------------------------------------
   const entries = chargeEntries({
-    quote: plan.quote,
+    quote,
     subscriptionId: row.id,
     customerUserId: row.customer_user_id,
     providerUserId,
@@ -266,6 +292,30 @@ export async function settleSubscription(args: {
       code: 'LEDGER_WRITE_FAILED',
       message: written.message,
       plan,
+    }
+  }
+
+  // --- 3b. Spend the referral discount -------------------------------------
+  //
+  // After the charge and after the ledger, because both can fail and this
+  // is the only record that the reward was used. The update is conditional
+  // on it still being unspent, so a re-run of the same cycle -- which the
+  // idempotency key makes safe everywhere else -- cannot discount twice.
+  if (affordable && referral.referralId !== null) {
+    const spent = await markDiscountSpent({
+      db,
+      referralId: referral.referralId,
+      discountCents,
+      now,
+    })
+    if (!spent) {
+      // Somebody else claimed it between the read and here. The charge
+      // already went out at the discounted price, so the platform gave up
+      // the fee twice for one referral. Small, bounded, and worth seeing.
+      console.warn('[settlement] referral discount was already spent', {
+        subscriptionId: row.id,
+        referralId: referral.referralId,
+      })
     }
   }
 
@@ -294,8 +344,9 @@ export async function settleSubscription(args: {
     targetId: row.id,
     after: {
       cycle_start: isoDate(plan.nextCycleStart),
-      charged_cents: plan.amountToChargeCents,
+      charged_cents: amountToChargeCents,
       credit_applied_cents: plan.creditAppliedCents,
+      referral_discount_cents: discountCents,
       settled: plan.toSettle.length,
       unresolved: plan.unresolved.length,
     },
