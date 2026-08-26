@@ -21,6 +21,7 @@ import { cancelSubscription, previewEnding } from '@/server/subscriptionService'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { isoDate } from '@/domain/schedule'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
+import { track } from '@/server/analytics'
 import type { EndingPlan } from '@/domain/subscription'
 
 export const dynamic = 'force-dynamic'
@@ -84,6 +85,16 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
       result.code === 'NOT_FOUND' ? 404 : result.code === 'NOT_YOUR_SUBSCRIPTION' ? 403 : 409
     return apiError(result.code, result.message, status, { requestId })
   }
+
+  track({
+    event: 'subscription_canceled',
+    userId: auth.auth.userId,
+    properties: {
+      subscription_id: id,
+      subscription_state: result.state,
+      amount_cents: result.refundedCents,
+    },
+  })
 
   return apiOk({
     subscriptionId: id,

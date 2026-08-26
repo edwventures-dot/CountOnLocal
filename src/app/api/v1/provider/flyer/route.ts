@@ -23,6 +23,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { formatCents } from '@/domain/money'
 import { qrSvgDataUri } from '@/server/qr'
 import { apiError, newRequestId } from '@/lib/http'
+import { track } from '@/server/analytics'
 
 export const dynamic = 'force-dynamic'
 
@@ -96,6 +97,15 @@ export async function GET(request: Request): Promise<Response> {
     },
     copies,
   )
+
+  track({
+    event: 'flyer_generated',
+    userId: auth.auth.userId,
+    // Not the number of copies: there is no allowlist name that means that,
+    // and borrowing one that means something else would make the events
+    // table lie.
+    properties: { service_id: service.serviceId },
+  })
 
   return new Response(html, {
     status: 200,

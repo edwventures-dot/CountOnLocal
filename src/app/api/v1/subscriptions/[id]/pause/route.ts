@@ -26,6 +26,7 @@ import { pauseSubscription, previewEnding, resumeSubscription } from '@/server/s
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { isoDate } from '@/domain/schedule'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
+import { track } from '@/server/analytics'
 
 export const dynamic = 'force-dynamic'
 
@@ -115,6 +116,12 @@ export async function DELETE(request: Request, { params }: Params): Promise<Resp
       result.code === 'NOT_FOUND' ? 404 : result.code === 'NOT_YOUR_SUBSCRIPTION' ? 403 : 409
     return apiError(result.code, result.message, status, { requestId })
   }
+
+  track({
+    event: 'subscription_paused',
+    userId: auth.auth.userId,
+    properties: { subscription_id: id, subscription_state: result.state },
+  })
 
   return apiOk({ subscriptionId: id, state: result.state })
 }

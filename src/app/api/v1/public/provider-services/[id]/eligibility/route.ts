@@ -19,6 +19,8 @@ import { checkAddressEligibility, addressSchema } from '@/server/eligibility'
 import { publicEnv } from '@/lib/env'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
 import { fieldErrorsFrom, parseJson } from '@/app/api/v1/_shared'
+import { track } from '@/server/analytics'
+import { postalPrefix } from '@/domain/analytics'
 import type { Database } from '@/lib/supabase/types'
 
 export async function POST(
@@ -57,6 +59,19 @@ export async function POST(
     address: parsed.data,
   })
 
+  // PRD section 25's `address_checked`. This is the one funnel event whose
+  // call site has a full street address in scope, so the coarsening happens
+  // here, explicitly, rather than being left to the allowlist to catch.
+  // There is no user id: this endpoint is deliberately unauthenticated.
+  track({
+    event: 'address_checked',
+    properties: {
+      service_id: id,
+      result: result.ok ? 'ok' : result.code,
+      postal_prefix: postalPrefix(parsed.data.postalCode),
+    },
+  })
+
   if (!result.ok) {
     switch (result.code) {
       case 'SERVICE_NOT_FOUND':
@@ -76,6 +91,13 @@ export async function POST(
           requestId,
         })
     }
+  }
+
+  if (result.eligible) {
+    track({
+      event: 'address_eligible',
+      properties: { service_id: id, postal_prefix: postalPrefix(parsed.data.postalCode) },
+    })
   }
 
   return apiOk({

@@ -24,6 +24,7 @@ import { loadProviderGateContext } from '@/server/providerGate'
 import { canRunRoute } from '@/domain/gates'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
+import { track } from '@/server/analytics'
 
 export const dynamic = 'force-dynamic'
 
@@ -94,6 +95,12 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
       result.code === 'NOT_FOUND' ? 404 : result.code === 'NOT_YOUR_OCCURRENCE' ? 403 : 409
     return apiError(result.code, result.message, status, { requestId })
   }
+
+  track({
+    event: 'occurrence_completed',
+    userId: auth.auth.userId,
+    properties: { occurrence_id: parsed.data.occurrenceId, occurrence_state: result.state },
+  })
 
   return apiOk({ occurrenceId: parsed.data.occurrenceId, state: result.state })
 }

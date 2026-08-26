@@ -15,6 +15,7 @@ import { createSubscription, createSubscriptionSchema } from '@/server/checkoutS
 import { apiError, apiOk } from '@/lib/http'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { clientIp } from '@/server/auth'
+import { track } from '@/server/analytics'
 
 export async function POST(req: Request): Promise<Response> {
   const g = await guard('subscription:create')
@@ -41,6 +42,26 @@ export async function POST(req: Request): Promise<Response> {
     now: new Date(),
     ip: clientIp(req),
   })
+
+  if (result.ok) {
+    track({
+      event: 'subscription_started',
+      userId: auth.userId,
+      properties: {
+        subscription_id: result.subscriptionId,
+        subscription_state: result.state,
+        occurrence_count: result.occurrenceCount,
+        price_cents: result.quote.serviceSubtotalCents,
+        platform_fee_cents: result.quote.platformFeeCents,
+      },
+    })
+  } else if (result.code === 'AT_CAPACITY') {
+    // Worth counting separately from other failures. A full route is the
+    // signal PRD section 14's density prompt exists to act on, and the
+    // funnel needs to distinguish "nobody wanted it" from "we turned them
+    // away".
+    track({ event: 'checkout_started', userId: auth.userId, properties: { at_capacity: true } })
+  }
 
   if (!result.ok) {
     switch (result.code) {

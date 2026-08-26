@@ -17,6 +17,7 @@ import { authenticate, clientIp } from '@/server/auth'
 import { createReview } from '@/server/reviewService'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
+import { track } from '@/server/analytics'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +61,12 @@ export async function POST(request: Request): Promise<Response> {
             : 500
     return apiError(result.code, result.message, status, { requestId })
   }
+
+  track({
+    event: 'review_submitted',
+    userId: auth.auth.userId,
+    properties: { review_id: result.reviewId },
+  })
 
   return apiOk({ reviewId: result.reviewId }, 201)
 }

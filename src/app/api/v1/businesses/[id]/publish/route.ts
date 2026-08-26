@@ -5,6 +5,7 @@ import { publishBusiness } from '@/server/businessService'
 import { apiError, apiOk } from '@/lib/http'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { clientIp } from '@/server/auth'
+import { track } from '@/server/analytics'
 
 export async function POST(
   req: Request,
@@ -48,6 +49,12 @@ export async function POST(
     }
     return apiError('INTERNAL_ERROR', 'Something went wrong. Please try again.', 500, { requestId })
   }
+
+  track({
+    event: 'business_published',
+    userId: auth.userId,
+    properties: { business_id: id },
+  })
 
   return apiOk({ slug: result.slug, publishedAt: result.publishedAt, state: 'published' })
 }
