@@ -28,6 +28,7 @@ const TABLES = [
   'guardian_profiles',
   'guardian_relationships',
   'audit_log',
+  'waitlist_signups',
 ]
 
 let passed = 0

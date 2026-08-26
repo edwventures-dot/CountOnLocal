@@ -15,6 +15,8 @@ export type UserRole =
   | 'finance_admin'
   | 'platform_admin'
 
+export type WaitlistRoleEnum = 'provider' | 'customer' | 'guardian'
+
 export type SubscriptionStateEnum =
   | 'pending'
   | 'active'
@@ -484,6 +486,22 @@ export type Database = {
           ip_hash?: string | null
         }
         Update: Partial<Database['public']['Tables']['audit_log']['Insert']>
+        Relationships: []
+      }
+      waitlist_signups: {
+        Row: {
+          id: string
+          email: string
+          role: WaitlistRoleEnum
+          postal_code: string | null
+          created_at: string
+        }
+        Insert: {
+          email: string
+          role: WaitlistRoleEnum
+          postal_code?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['waitlist_signups']['Insert']>
         Relationships: []
       }
     }

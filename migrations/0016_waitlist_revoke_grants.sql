@@ -1,0 +1,33 @@
+-- 0016  Revoke the default grants Supabase hands out on waitlist_signups.
+--
+-- 0015 enabled row level security with no policies and called that "deny
+-- everything". Half true, and the missing half matters.
+--
+-- Supabase's default privileges on the public schema grant anon and
+-- authenticated the full set on every newly created table. Verified against
+-- the live database immediately after 0015 applied:
+--
+--   waitlist_signups | anon          | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+--   waitlist_signups | authenticated | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+--
+-- RLS was the only thing standing between the anon key -- which ships in the
+-- browser bundle by design -- and TRUNCATE on the table. Nothing leaked,
+-- because with no policies RLS filters every row and refuses every write.
+-- But "one mistake away from an email list" is exactly what 0015 said it was
+-- avoiding, and a single careless `create policy ... for select using (true)`
+-- later would have opened it.
+--
+-- scripts/verify-rls.mjs caught this: anon got HTTP 200 with zero rows on
+-- waitlist_signups where every other table returns 401. That difference is
+-- the tell -- 200-with-nothing means "you may read, there is just nothing
+-- visible", and 401 means "you may not read". We want the second one.
+--
+-- The pattern here matches 0007_stripe_events.sql, the closest analogue:
+-- a table only ever written by a server path holding the service role.
+
+revoke all on waitlist_signups from anon, authenticated;
+
+-- Note for every future table: `alter table ... enable row level security`
+-- is necessary but not sufficient on Supabase. Grants are a separate layer,
+-- and the defaults are permissive. Revoke explicitly, then let verify-rls
+-- prove it.
