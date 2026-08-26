@@ -63,7 +63,16 @@ export type CheckoutPreview = {
 }
 
 export type PreviewResult =
-  | { ok: true; preview: CheckoutPreview }
+  | {
+      ok: true
+      preview: CheckoutPreview
+      /**
+       * Internal only -- deliberately outside CheckoutPreview, which is the
+       * API response shape. createSubscription persists this; nothing sends
+       * it to a client.
+       */
+      point?: { latitude: number; longitude: number } | undefined
+    }
   | {
       ok: false
       code:
@@ -146,6 +155,9 @@ export async function previewCheckout(args: {
     db,
     providerServiceId: input.providerServiceId,
     address: input.address as AddressFields,
+    // Needed to persist the point so a route can be ordered later without
+    // geocoding the same house again.
+    includePoint: true,
   })
   if (!eligibility.ok) return { ok: false, code: eligibility.code }
 
@@ -172,6 +184,9 @@ export async function previewCheckout(args: {
 
   return {
     ok: true,
+    // Carried alongside the preview, not inside it: createSubscription
+    // persists it so the route can be ordered without geocoding again.
+    ...(eligibility.point ? { point: eligibility.point } : {}),
     preview: {
       serviceName: service.public_name,
       businessName: business.name,
@@ -332,6 +347,21 @@ export async function createSubscription(args: {
   if (inserted.error || !address) {
     console.error('[checkout] address write failed', inserted.error?.message)
     return { ok: false, code: 'WRITE_FAILED' }
+  }
+
+  // Keep the coordinates. Until 0018 they were used for the eligibility
+  // check and discarded, which left the route with no idea where any house
+  // was. A failure here is not fatal to checkout -- the subscription is
+  // valid, the stop just orders last until the address is geocoded again.
+  if (preview.point) {
+    const { error: pointError } = await db.rpc('set_customer_address_point' as never, {
+      p_address_id: address.id,
+      p_lat: preview.point.latitude,
+      p_lng: preview.point.longitude,
+    } as never)
+    if (pointError) {
+      console.error('[checkout] address point write failed', pointError.message)
+    }
   }
 
   const { data: subscription, error: subError } = await db

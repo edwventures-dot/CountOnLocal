@@ -36,6 +36,19 @@ export type EligibilityResult =
       /** The geocoder's normalized form, so the customer can confirm we
        *  understood the address they meant. */
       normalizedAddress: string
+      /**
+       * Where the geocoder put the house.
+       *
+       * Present ONLY when the caller passes includePoint. The default
+       * answer is yes-or-no plus the normalised address and nothing else,
+       * and there is a test asserting exactly those three keys -- this
+       * endpoint is reachable unauthenticated, so every extra field in the
+       * default shape is a decision, not an accident.
+       *
+       * Checkout asks for it so it can persist the point (0018) rather than
+       * geocoding the same house twice.
+       */
+      point?: { latitude: number; longitude: number } | undefined
     }
   | {
       ok: false
@@ -59,6 +72,11 @@ export async function checkAddressEligibility(args: {
   providerServiceId: string
   address: AddressFields
   signal?: AbortSignal
+  /**
+   * Return the geocoded point alongside the answer. Off by default: see
+   * EligibilityResult.point.
+   */
+  includePoint?: boolean | undefined
 }): Promise<EligibilityResult> {
   const { db, providerServiceId, address } = args
 
@@ -115,5 +133,8 @@ export async function checkAddressEligibility(args: {
     ok: true,
     eligible: data === true,
     normalizedAddress: geocoded.normalizedAddress,
+    ...(args.includePoint
+      ? { point: { latitude: geocoded.latitude, longitude: geocoded.longitude } }
+      : {}),
   }
 }
