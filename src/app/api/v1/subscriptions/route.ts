@@ -76,8 +76,13 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   if (result.ok) {
+    // `checkout_started`, not `subscription_started`. Nothing has been
+    // charged and nobody is on a route yet -- the subscription starts when
+    // the first cycle is paid, on PUT .../payment. Keeping the two events
+    // distinct is what makes the gap between them mean "abandoned before
+    // paying" rather than nothing at all.
     track({
-      event: 'subscription_started',
+      event: 'checkout_started',
       userId: auth.userId,
       properties: {
         subscription_id: result.subscriptionId,

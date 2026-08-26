@@ -49,8 +49,51 @@ export type RefundResult =
   | { ok: true; processor: string; externalId: string }
   | { ok: false; processor: string; message: string }
 
+export type EnsureCustomerRequest = {
+  /** Our own user id. Goes into processor metadata, nothing more. */
+  userRef: string
+  idempotencyKey: string
+}
+
+export type EnsureCustomerResult =
+  | { ok: true; processor: string; customerRef: string }
+  | { ok: false; processor: string; message: string }
+
+export type SetupIntentRequest = {
+  customerRef: string
+  idempotencyKey: string
+}
+
+export type SetupIntentResult =
+  | {
+      ok: true
+      processor: string
+      externalId: string
+      /**
+       * Handed to the browser, which confirms the card directly with the
+       * processor. Card details never reach this server, which is the
+       * entire point of doing it this way rather than accepting a number.
+       */
+      clientSecret: string
+    }
+  | { ok: false; processor: string; message: string }
+
 export interface Charger {
   charge(request: ChargeRequest): Promise<ChargeResult>
+  /**
+   * A processor-side customer to hang payment methods off.
+   *
+   * Carries our user id as metadata and nothing else -- no email, no name.
+   * The processor does not need to know who this person is to hold a card
+   * for them, and TECHNICAL_SPEC section 17's rule about what leaves the
+   * building does not stop applying because the recipient is Stripe.
+   */
+  ensureCustomer(request: EnsureCustomerRequest): Promise<EnsureCustomerResult>
+  /**
+   * Starts card collection. The browser confirms against the returned
+   * secret, so no card number, CVC or expiry ever touches this server.
+   */
+  createSetupIntent(request: SetupIntentRequest): Promise<SetupIntentResult>
   /**
    * Hands money back. PRD section 12: when a subscription ends before its
    * credit is spent, "the balance is refundable".
@@ -59,6 +102,48 @@ export interface Charger {
 }
 
 export class StripeCharger implements Charger {
+  async ensureCustomer(request: EnsureCustomerRequest): Promise<EnsureCustomerResult> {
+    try {
+      const customer = await stripe().customers.create(
+        { metadata: { app_user_id: request.userRef } },
+        { idempotencyKey: request.idempotencyKey },
+      )
+      return { ok: true, processor: 'stripe', customerRef: customer.id }
+    } catch (err) {
+      const e = err as { message?: string }
+      return { ok: false, processor: 'stripe', message: e.message ?? 'Could not create a customer.' }
+    }
+  }
+
+  async createSetupIntent(request: SetupIntentRequest): Promise<SetupIntentResult> {
+    try {
+      const intent = await stripe().setupIntents.create(
+        {
+          customer: request.customerRef,
+          // The card is kept to charge later, when nobody is at the
+          // keyboard. Declaring that here is what lets the renewal charge
+          // run off-session without a fresh authorisation.
+          usage: 'off_session',
+        },
+        { idempotencyKey: request.idempotencyKey },
+      )
+
+      if (!intent.client_secret) {
+        return { ok: false, processor: 'stripe', message: 'Setup intent returned no client secret.' }
+      }
+
+      return {
+        ok: true,
+        processor: 'stripe',
+        externalId: intent.id,
+        clientSecret: intent.client_secret,
+      }
+    } catch (err) {
+      const e = err as { message?: string }
+      return { ok: false, processor: 'stripe', message: e.message ?? 'Could not start card setup.' }
+    }
+  }
+
   async charge(request: ChargeRequest): Promise<ChargeResult> {
     try {
       const intent = await stripe().paymentIntents.create(
@@ -140,6 +225,10 @@ export class StripeCharger implements Charger {
  * amount, which are the two things worth getting wrong quietly.
  */
 export class StubCharger implements Charger {
+  readonly customers: EnsureCustomerRequest[] = []
+  readonly setups: SetupIntentRequest[] = []
+  private setupOutcome: SetupIntentResult | undefined
+
   readonly refunds: RefundRequest[] = []
   private refundOutcome: RefundResult | undefined
 
@@ -154,6 +243,27 @@ export class StubCharger implements Charger {
 
   setOutcome(outcome: ChargeResult | ((r: ChargeRequest) => ChargeResult)): void {
     this.outcome = outcome
+  }
+
+  setSetupOutcome(outcome: SetupIntentResult): void {
+    this.setupOutcome = outcome
+  }
+
+  async ensureCustomer(request: EnsureCustomerRequest): Promise<EnsureCustomerResult> {
+    this.customers.push(request)
+    return { ok: true, processor: 'stub', customerRef: `cus_stub_${request.userRef}` }
+  }
+
+  async createSetupIntent(request: SetupIntentRequest): Promise<SetupIntentResult> {
+    this.setups.push(request)
+    return (
+      this.setupOutcome ?? {
+        ok: true,
+        processor: 'stub',
+        externalId: `seti_stub_${request.idempotencyKey}`,
+        clientSecret: `seti_stub_${request.idempotencyKey}_secret`,
+      }
+    )
   }
 
   async charge(request: ChargeRequest): Promise<ChargeResult> {

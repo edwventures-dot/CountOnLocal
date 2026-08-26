@@ -83,6 +83,27 @@ Creates subscription and initial processor setup/charge flow.
 
 Idempotent.
 
+Implemented as two steps rather than one. This call creates the
+subscription in `pending` and generates its first horizon of occurrences,
+and takes no money. An abandoned checkout therefore costs nobody anything
+and puts no stranger on a provider's route.
+
+### `POST /v1/subscriptions/{id}/payment`
+Opens card collection. Returns a processor client secret the browser
+confirms the card against; card details never reach the server.
+
+### `PUT /v1/subscriptions/{id}/payment`
+Charges the first cycle and moves the subscription to `active`.
+
+Re-checks eligibility rather than trusting the checks that passed when the
+row was written: a pending subscription can sit for days, and in that time
+a route can fill or a guardian can revoke. For a minor provider this
+endpoint requires a cleared guardian state -- a revocation prevents new
+checkout with no job to run and no cache to bust.
+
+Every failure leaves the subscription `pending` and retryable. Safe to call
+again: the charge is keyed on (subscription, cycle start).
+
 ### `POST /v1/subscriptions/{id}/skip`
 Skips specified occurrence/date range under notice policy.
 
