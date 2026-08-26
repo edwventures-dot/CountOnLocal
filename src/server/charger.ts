@@ -37,8 +37,25 @@ export type ChargeResult =
   /** Something broke. Safe to retry with the same key. */
   | { ok: false; code: 'error'; processor: string; message: string }
 
+export type RefundRequest = {
+  amountCents: number
+  /** The processor charge being refunded against. */
+  externalChargeId: string
+  idempotencyKey: string
+  reason: string
+}
+
+export type RefundResult =
+  | { ok: true; processor: string; externalId: string }
+  | { ok: false; processor: string; message: string }
+
 export interface Charger {
   charge(request: ChargeRequest): Promise<ChargeResult>
+  /**
+   * Hands money back. PRD section 12: when a subscription ends before its
+   * credit is spent, "the balance is refundable".
+   */
+  refund(request: RefundRequest): Promise<RefundResult>
 }
 
 export class StripeCharger implements Charger {
@@ -93,6 +110,27 @@ export class StripeCharger implements Charger {
       }
     }
   }
+
+  async refund(request: RefundRequest): Promise<RefundResult> {
+    try {
+      const refund = await stripe().refunds.create(
+        {
+          payment_intent: request.externalChargeId,
+          amount: request.amountCents,
+          metadata: { reason: request.reason },
+        },
+        { idempotencyKey: request.idempotencyKey },
+      )
+      return { ok: true, processor: 'stripe', externalId: refund.id }
+    } catch (err) {
+      const e = err as { message?: string }
+      return {
+        ok: false,
+        processor: 'stripe',
+        message: e.message ?? 'Refund could not be processed.',
+      }
+    }
+  }
 }
 
 /**
@@ -102,6 +140,9 @@ export class StripeCharger implements Charger {
  * amount, which are the two things worth getting wrong quietly.
  */
 export class StubCharger implements Charger {
+  readonly refunds: RefundRequest[] = []
+  private refundOutcome: RefundResult | undefined
+
   readonly requests: ChargeRequest[] = []
   private outcome: ChargeResult | ((r: ChargeRequest) => ChargeResult)
 
@@ -118,6 +159,21 @@ export class StubCharger implements Charger {
   async charge(request: ChargeRequest): Promise<ChargeResult> {
     this.requests.push(request)
     return typeof this.outcome === 'function' ? this.outcome(request) : this.outcome
+  }
+
+  setRefundOutcome(outcome: RefundResult): void {
+    this.refundOutcome = outcome
+  }
+
+  async refund(request: RefundRequest): Promise<RefundResult> {
+    this.refunds.push(request)
+    return (
+      this.refundOutcome ?? {
+        ok: true,
+        processor: 'stub',
+        externalId: `re_stub_${request.idempotencyKey}`,
+      }
+    )
   }
 
   /** Requests seen for one idempotency key. Should never exceed one. */

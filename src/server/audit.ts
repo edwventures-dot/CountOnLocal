@@ -47,6 +47,8 @@ export type AuditAction =
   | 'ledger.credit_written'
   | 'subscription.cycle_settled'
   | 'subscription.payment_failed'
+  | 'subscription.paused'
+  | 'subscription.resumed'
   | 'service.created'
   | 'service.wording_refused'
   | 'service.area_set'
