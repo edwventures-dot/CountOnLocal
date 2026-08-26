@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   chargeEntries,
-  creditEntry,
+  creditEntries,
+  standingCreditCents,
+  visitFeeShareCents,
   cycleChargeKey,
   isBalanced,
   payoutEntry,
@@ -105,24 +107,65 @@ describe('an inconsistent quote is refused rather than written', () => {
   })
 })
 
-describe('credits', () => {
-  const credit = creditEntry({
-    amountCents: 300,
+const VISIT = 300
+const FEE_SHARE = visitFeeShareCents({
+  cycleFeeCents: PRD_QUOTE.platformFeeCents,
+  visitValueCents: VISIT,
+  cycleSubtotalCents: PRD_QUOTE.serviceSubtotalCents,
+})
+
+describe('a credit reverses all three sides of a visit', () => {
+  const credit = creditEntries({
+    serviceCents: VISIT,
+    feeShareCents: FEE_SHARE,
     subscriptionId: 'sub_1',
     occurrenceId: 'occ_9',
     customerUserId: 'cust_1',
     providerUserId: 'prov_1',
   })
 
-  it('is stored negative, per the 0013 sign rule', () => {
-    expect(credit.amountCents).toBe(-300)
-    expect(credit.kind).toBe('credit')
+  it('shares out the cycle fee proportionally -- 45 of the 180', () => {
+    expect(FEE_SHARE).toBe(45)
   })
 
-  it('takes a positive amount and applies the sign itself', () => {
+  it('nets to zero', () => {
+    expect(sumCents(credit)).toBe(0)
+  })
+
+  it('owes the customer back what they paid for that visit, fee included', () => {
+    expect(credit.find((e) => e.kind === 'credit')?.amountCents).toBe(-345)
+  })
+
+  it('stops the provider being owed for a visit they did not make', () => {
+    const cycle = chargeEntries({ ...IDS, quote: PRD_QUOTE, idempotencyKey: 'k1' })
+    expect(providerBalanceCents(cycle)).toBe(1200)
+    expect(providerBalanceCents([...cycle, ...credit])).toBe(900) // 3 delivered
+  })
+
+  it('gives back the platform cut on work that never happened', () => {
+    const cycle = chargeEntries({ ...IDS, quote: PRD_QUOTE, idempotencyKey: 'k1' })
+    expect(platformRevenueCents(cycle)).toBe(180)
+    expect(platformRevenueCents([...cycle, ...credit])).toBe(135)
+  })
+
+  it('omits a zero fee row rather than writing noise', () => {
+    const free = creditEntries({
+      serviceCents: 300,
+      feeShareCents: 0,
+      subscriptionId: 'sub_1',
+      occurrenceId: 'occ_9',
+      customerUserId: 'cust_1',
+      providerUserId: 'prov_1',
+    })
+    expect(free).toHaveLength(2)
+    expect(sumCents(free)).toBe(0)
+  })
+
+  it('takes positive amounts and applies the signs itself', () => {
     expect(() =>
-      creditEntry({
-        amountCents: -300,
+      creditEntries({
+        serviceCents: -300,
+        feeShareCents: 45,
         subscriptionId: 'sub_1',
         occurrenceId: 'occ_9',
         customerUserId: 'cust_1',
@@ -130,28 +173,86 @@ describe('credits', () => {
       }),
     ).toThrow(/positive/)
   })
+})
 
-  it('points at the occurrence that caused it', () => {
-    expect(credit.occurrenceId).toBe('occ_9')
+describe('two cycles with a skipped visit, end to end', () => {
+  const cycle1 = chargeEntries({ ...IDS, quote: PRD_QUOTE, idempotencyKey: 'k1' })
+  const credit = creditEntries({
+    serviceCents: VISIT,
+    feeShareCents: FEE_SHARE,
+    subscriptionId: 'sub_1',
+    occurrenceId: 'occ_9',
+    customerUserId: 'cust_1',
+    providerUserId: 'prov_1',
+  })
+  const standing = standingCreditCents([...cycle1, ...credit])
+  const cycle2 = chargeEntries({
+    ...IDS,
+    quote: PRD_QUOTE,
+    idempotencyKey: 'k2',
+    creditAppliedCents: standing,
+  })
+  const all = [...cycle1, ...credit, ...cycle2]
+
+  it('leaves 345 standing after the skip', () => {
+    expect(standing).toBe(345)
   })
 
-  it('rebalances once the reduced next charge lands', () => {
-    // Cycle 1 charged in full, one visit skipped, cycle 2 charged less.
-    const cycle1 = chargeEntries({ ...IDS, quote: PRD_QUOTE, idempotencyKey: 'k1' })
-    const reduced = quoteCycle({
-      priceCents: 300,
-      priceUnit: 'week',
-      billingCycleWeeks: 4,
-      creditCents: 300,
-    })
-    const cycle2 = chargeEntries({ ...IDS, quote: reduced, idempotencyKey: 'k2' })
+  it('consumes the credit exactly once', () => {
+    expect(standingCreditCents(all)).toBe(0)
+  })
 
-    // The credit is negative now and the smaller charge is the offset.
-    const all = [...cycle1, credit, ...cycle2]
+  it('charges the customer 1035 for the second cycle', () => {
+    const charge = cycle2.find((e) => e.kind === 'customer_charge')
+    expect(charge?.amountCents).toBe(1035)
+  })
+
+  it('keeps every cycle balanced, and the subscription overall', () => {
     expect(sumCents(cycle1)).toBe(0)
+    expect(sumCents(credit)).toBe(0)
     expect(sumCents(cycle2)).toBe(0)
-    // The standing credit is the only thing left unallocated.
-    expect(sumCents(all)).toBe(-300)
+    expect(sumCents(all)).toBe(0)
+  })
+
+  it('pays the provider for the 7 visits actually delivered', () => {
+    expect(providerBalanceCents(all)).toBe(7 * VISIT)
+  })
+
+  it('earns the platform its fee on delivered work only', () => {
+    // 15% of 2100 = 315, not 360.
+    expect(platformRevenueCents(all)).toBe(315)
+  })
+
+  it('collects exactly work plus fee from the customer', () => {
+    const paid = all
+      .filter((e) => e.kind === 'customer_charge')
+      .reduce((a, e) => a + e.amountCents, 0)
+    expect(paid).toBe(7 * VISIT + 315)
+  })
+})
+
+describe('credit application is bounded', () => {
+  it('refuses to apply more credit than the cycle is worth', () => {
+    expect(() =>
+      chargeEntries({ ...IDS, quote: PRD_QUOTE, idempotencyKey: 'k', creditAppliedCents: 99999 }),
+    ).toThrow(/more credit/)
+  })
+
+  it('refuses a negative application', () => {
+    expect(() =>
+      chargeEntries({ ...IDS, quote: PRD_QUOTE, idempotencyKey: 'k', creditAppliedCents: -1 }),
+    ).toThrow(/negative/)
+  })
+
+  it('handles a cycle fully covered by credit', () => {
+    const full = chargeEntries({
+      ...IDS,
+      quote: PRD_QUOTE,
+      idempotencyKey: 'k',
+      creditAppliedCents: PRD_QUOTE.customerTotalCents,
+    })
+    expect(full.find((e) => e.kind === 'customer_charge')?.amountCents).toBe(0)
+    expect(sumCents(full)).toBe(0)
   })
 })
 

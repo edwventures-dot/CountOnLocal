@@ -26,8 +26,9 @@ import {
   type CreditDecision,
   type SkipPolicy,
 } from '@/domain/credit'
-import { creditEntry } from '@/domain/ledger'
-import { writeStandaloneEntries } from '@/server/ledgerWriter'
+import { creditEntries, visitFeeShareCents } from '@/domain/ledger'
+import { quoteCycle, type PriceUnit } from '@/domain/money'
+import { writeBalancedEntries } from '@/server/ledgerWriter'
 import { writeAudit } from '@/server/audit'
 import type { PlainDate } from '@/domain/age'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -82,6 +83,14 @@ type Loaded = {
   subscriptionId: string
   customerUserId: string
   providerUserId: string
+  /** Frozen on the subscription at checkout, so an old visit keeps old terms. */
+  pricing: {
+    priceCents: number
+    priceUnit: PriceUnit
+    billingCycleWeeks: number
+    feeBps: number
+    feeMinCents: number
+  }
 }
 
 async function load(db: Db, occurrenceId: string): Promise<Loaded | null> {
@@ -91,6 +100,8 @@ async function load(db: Db, occurrenceId: string): Promise<Loaded | null> {
       `id, state, service_date, service_value_cents, subscription_id,
        subscriptions!inner (
          customer_user_id,
+         provider_price_cents, price_unit, billing_cycle_weeks,
+         platform_fee_bps, platform_fee_min_cents,
          provider_services!inner (
            businesses!inner ( provider_user_id )
          )
@@ -104,7 +115,15 @@ async function load(db: Db, occurrenceId: string): Promise<Loaded | null> {
   // The nested selects come back as objects or single-element arrays
   // depending on how PostgREST infers the relationship; normalise both.
   const sub = (Array.isArray(data.subscriptions) ? data.subscriptions[0] : data.subscriptions) as
-    | { customer_user_id: string; provider_services: unknown }
+    | {
+        customer_user_id: string
+        provider_price_cents: number
+        price_unit: string
+        billing_cycle_weeks: number
+        platform_fee_bps: number
+        platform_fee_min_cents: number
+        provider_services: unknown
+      }
     | undefined
   if (!sub) return null
 
@@ -124,6 +143,13 @@ async function load(db: Db, occurrenceId: string): Promise<Loaded | null> {
     subscriptionId: data.subscription_id,
     customerUserId: sub.customer_user_id,
     providerUserId: biz.provider_user_id,
+    pricing: {
+      priceCents: sub.provider_price_cents,
+      priceUnit: sub.price_unit as PriceUnit,
+      billingCycleWeeks: sub.billing_cycle_weeks,
+      feeBps: sub.platform_fee_bps,
+      feeMinCents: sub.platform_fee_min_cents,
+    },
   }
 }
 
@@ -255,21 +281,35 @@ export async function skipOccurrence(args: {
   }
 
   if (credit.credited && credit.amountCents > 0) {
-    const written = await writeStandaloneEntries({
+    const cycleQuote = quoteCycle({
+      priceCents: occ.pricing.priceCents,
+      priceUnit: occ.pricing.priceUnit,
+      billingCycleWeeks: occ.pricing.billingCycleWeeks,
+      fee: { percentBasisPoints: occ.pricing.feeBps, minimumCents: occ.pricing.feeMinCents },
+    })
+
+    const written = await writeBalancedEntries({
       db,
-      entries: [
-        creditEntry({
-          amountCents: credit.amountCents,
-          subscriptionId: occ.subscriptionId,
-          occurrenceId: occ.id,
-          customerUserId: occ.customerUserId,
-          providerUserId: occ.providerUserId,
-          memo: credit.code,
-          // One credit per occurrence, ever. A double-tapped skip button
-          // cannot credit the same visit twice.
-          idempotencyKey: `credit:${occ.id}`,
+      entries: creditEntries({
+        serviceCents: credit.amountCents,
+        // The customer paid a fee on this visit too, so it comes back with
+        // it. Proportional to the cycle's actual fee rather than a fresh
+        // percentage, so a cycle where the minimum applied reverses the
+        // minimum proportionally as well.
+        feeShareCents: visitFeeShareCents({
+          cycleFeeCents: cycleQuote.platformFeeCents,
+          visitValueCents: credit.amountCents,
+          cycleSubtotalCents: cycleQuote.serviceSubtotalCents,
         }),
-      ],
+        subscriptionId: occ.subscriptionId,
+        occurrenceId: occ.id,
+        customerUserId: occ.customerUserId,
+        providerUserId: occ.providerUserId,
+        memo: credit.code,
+        // One credit per occurrence, ever. A double-tapped skip button
+        // cannot credit the same visit twice.
+        idempotencyKey: `credit:${occ.id}`,
+      }),
     })
 
     if (!written.ok) {

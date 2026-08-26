@@ -41,6 +41,7 @@
  * thing to replace, not to extend.
  */
 
+import { roundHalfUp } from './money'
 import type { CycleQuote } from './money'
 
 export type LedgerKind =
@@ -102,8 +103,20 @@ export function chargeEntries(args: {
   externalProcessor?: string
   externalId?: string
   idempotencyKey: string
+  /**
+   * Standing credit consumed by this cycle. The customer_charge is smaller
+   * by this much and an adjustment makes up the difference, so the set still
+   * sums to zero and the credit cannot be spent twice.
+   */
+  creditAppliedCents?: number
 }): LedgerEntry[] {
   const { quote } = args
+  const creditApplied = args.creditAppliedCents ?? 0
+  assertWholeCents('creditAppliedCents', creditApplied)
+  if (creditApplied < 0) throw new RangeError('creditAppliedCents cannot be negative')
+  if (creditApplied > quote.customerTotalCents) {
+    throw new RangeError('Cannot apply more credit than the cycle is worth')
+  }
   const currency = args.currency ?? 'USD'
 
   assertWholeCents('customerTotalCents', quote.customerTotalCents)
@@ -127,11 +140,11 @@ export function chargeEntries(args: {
     externalId: args.externalId,
   }
 
-  return [
+  const entries: LedgerEntry[] = [
     {
       ...common,
       kind: 'customer_charge',
-      amountCents: quote.customerTotalCents,
+      amountCents: quote.customerTotalCents - creditApplied,
       // Only the charge carries the key: it is the row that corresponds to
       // the processor event, and the column is unique across the table.
       idempotencyKey: args.idempotencyKey,
@@ -150,18 +163,63 @@ export function chargeEntries(args: {
       memo: 'Platform fee',
     },
   ]
+
+  if (creditApplied > 0) {
+    entries.push({
+      ...common,
+      kind: 'adjustment',
+      amountCents: creditApplied,
+      memo: 'Credit applied to this cycle',
+    })
+  }
+
+  return entries
+}
+
+/**
+ * The customer's share of the cycle fee attributable to one visit.
+ *
+ * Proportional to the actual fee charged rather than a fresh percentage of
+ * the visit, so a cycle where the $1 minimum applied reverses the minimum
+ * proportionally too instead of inventing a different number.
+ */
+export function visitFeeShareCents(args: {
+  cycleFeeCents: number
+  visitValueCents: number
+  cycleSubtotalCents: number
+}): number {
+  if (args.cycleSubtotalCents <= 0) return 0
+  return roundHalfUp(args.cycleFeeCents * args.visitValueCents, args.cycleSubtotalCents)
 }
 
 /**
  * A credit for a visit that did not happen.
  *
- * Negative, and paired with nothing: it is applied by reducing the next
- * cycle's charge via quoteCycle's creditCents, so the offsetting positive
- * arrives as a smaller customer_charge later. A cycle carrying credits
- * still sums to zero once that smaller charge lands.
+ * THREE entries, netting to zero, because a visit has three sides and all
+ * three have to come back.
+ *
+ * The first draft wrote a single -300 and was wrong twice over. The cycle
+ * was charged up front for four visits, so crediting only the customer left
+ * the provider holding 300 cents for a visit they never made. Reversing the
+ * provider's side as well fixed that but left the platform keeping its 45
+ * cents of fee on the same missing visit -- "a cut of work that never
+ * happened", which quoteCycle explicitly refuses to take.
+ *
+ *     credit           -345   the customer paid this for the visit
+ *     provider_earning +300   the provider is owed that much less
+ *     platform_fee      +45   the platform gives back its cut
+ *     -------------------------
+ *     sum                 0
+ *
+ * The customer's 345 stays outstanding as a standing credit until the next
+ * cycle's charge consumes it. The other two land immediately: neither party
+ * should show as owed for work nobody did.
  */
-export function creditEntry(args: {
-  amountCents: number
+export function creditEntries(args: {
+  /** The visit's service value. What the provider would have earned. */
+  serviceCents: number
+  /** That visit's share of the cycle fee. See visitFeeShareCents. */
+  feeShareCents: number
   subscriptionId: string
   occurrenceId: string
   customerUserId: string
@@ -169,21 +227,61 @@ export function creditEntry(args: {
   currency?: string
   memo?: string
   idempotencyKey?: string
-}): LedgerEntry {
-  assertWholeCents('amountCents', args.amountCents)
-  if (args.amountCents < 0) throw new RangeError('Pass a positive amount; the sign is applied here')
+}): LedgerEntry[] {
+  assertWholeCents('serviceCents', args.serviceCents)
+  assertWholeCents('feeShareCents', args.feeShareCents)
+  if (args.serviceCents < 0 || args.feeShareCents < 0) {
+    throw new RangeError('Pass positive amounts; the signs are applied here')
+  }
 
-  return {
-    kind: 'credit',
-    amountCents: -args.amountCents,
+  const common = {
     currency: args.currency ?? 'USD',
     subscriptionId: args.subscriptionId,
     occurrenceId: args.occurrenceId,
     customerUserId: args.customerUserId,
     providerUserId: args.providerUserId,
-    idempotencyKey: args.idempotencyKey,
-    memo: args.memo ?? 'Service credit',
   }
+
+  const entries: LedgerEntry[] = [
+    {
+      ...common,
+      kind: 'credit',
+      amountCents: -(args.serviceCents + args.feeShareCents),
+      idempotencyKey: args.idempotencyKey,
+      memo: args.memo ?? 'Service credit',
+    },
+    {
+      ...common,
+      kind: 'provider_earning',
+      amountCents: args.serviceCents,
+      memo: 'Reversal: visit not delivered',
+    },
+  ]
+
+  // Omit a zero fee row rather than writing noise -- a zero-fee service, or
+  // a cycle that was already fully credited.
+  if (args.feeShareCents > 0) {
+    entries.push({
+      ...common,
+      kind: 'platform_fee',
+      amountCents: args.feeShareCents,
+      memo: 'Reversal: no fee on an undelivered visit',
+    })
+  }
+
+  return entries
+}
+
+/**
+ * Standing credit a customer has not yet spent, in cents.
+ *
+ * Credits are negative and the adjustment that consumes one at settlement is
+ * positive, so what is left is the negated sum of the two kinds.
+ */
+export function standingCreditCents(entries: readonly LedgerEntry[]): number {
+  const relevant = entries.filter((e) => e.kind === 'credit' || e.kind === 'adjustment')
+  const owed = -sumCents(relevant)
+  return owed <= 0 ? 0 : owed
 }
 
 /** Money actually sent to a provider. Settles accumulated earnings. */
