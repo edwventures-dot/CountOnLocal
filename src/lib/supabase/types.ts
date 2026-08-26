@@ -19,6 +19,8 @@ export type WaitlistRoleEnum = 'provider' | 'customer' | 'guardian'
 
 export type ReviewStateEnum = 'published' | 'hidden' | 'removed'
 
+export type MessageStateEnum = 'delivered' | 'blocked' | 'redacted'
+
 export type NotificationChannelEnum = 'email' | 'sms' | 'push'
 
 export type NotificationStateEnum =
@@ -498,6 +500,60 @@ export type Database = {
           ip_hash?: string | null
         }
         Update: Partial<Database['public']['Tables']['audit_log']['Insert']>
+        Relationships: []
+      }
+      message_threads: {
+        Row: {
+          id: string
+          subscription_id: string
+          customer_user_id: string
+          provider_user_id: string
+          involves_minor: boolean
+          last_message_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          subscription_id: string
+          customer_user_id: string
+          provider_user_id: string
+          involves_minor?: boolean
+          last_message_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['message_threads']['Insert']>
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          id: string
+          thread_id: string
+          sender_user_id: string
+          body: string
+          state: MessageStateEnum
+          violation_code: string | null
+          urgent: boolean
+          reported_at: string | null
+          reported_by_user_id: string | null
+          report_reason: string | null
+          read_at: string | null
+          purge_after: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          thread_id: string
+          sender_user_id: string
+          body: string
+          state?: MessageStateEnum
+          violation_code?: string | null
+          urgent?: boolean
+          reported_at?: string | null
+          reported_by_user_id?: string | null
+          report_reason?: string | null
+          read_at?: string | null
+          purge_after: string
+        }
+        Update: Partial<Database['public']['Tables']['messages']['Insert']>
         Relationships: []
       }
       referral_codes: {

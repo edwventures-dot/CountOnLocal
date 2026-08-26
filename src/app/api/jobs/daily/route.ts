@@ -48,6 +48,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { extendHorizon, promoteDueToday } from '@/server/occurrenceJobs'
 import { runSettlement } from '@/server/settlementService'
 import { dispatchNotifications } from '@/server/notifications'
+import { purgeExpiredMessages } from '@/server/messageService'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
 
@@ -55,9 +56,9 @@ export const dynamic = 'force-dynamic'
 /** Settlement talks to a payment processor; give it room. */
 export const maxDuration = 300
 
-type JobName = 'extend-horizon' | 'due-today' | 'settle' | 'notify'
+type JobName = 'extend-horizon' | 'due-today' | 'settle' | 'notify' | 'purge-messages'
 
-const JOBS: readonly JobName[] = ['extend-horizon', 'due-today', 'settle', 'notify']
+const JOBS: readonly JobName[] = ['extend-horizon', 'due-today', 'settle', 'notify', 'purge-messages']
 
 function authorized(request: Request): boolean {
   const secret = process.env['CRON_SECRET']
@@ -121,6 +122,10 @@ export async function GET(request: Request): Promise<Response> {
   // Last, so anything the earlier jobs queued goes out in the same run
   // rather than waiting four hours.
   await run('notify', () => dispatchNotifications({ db, now }))
+  // PRD 17 requires the retention policy be implemented, not merely
+  // documented. Bodies past their date are redacted; the row stays, so the
+  // fact a conversation happened survives even though the words do not.
+  await run('purge-messages', () => purgeExpiredMessages({ db, now }))
 
   const finishedAt = new Date().toISOString()
 
