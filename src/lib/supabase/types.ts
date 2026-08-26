@@ -21,6 +21,9 @@ export type ReviewStateEnum = 'published' | 'hidden' | 'removed'
 
 export type MessageStateEnum = 'delivered' | 'blocked' | 'redacted'
 
+export type IncidentStateEnum = 'open' | 'investigating' | 'resolved' | 'closed'
+export type IncidentSeverityEnum = 'S0' | 'S1' | 'S2' | 'S3'
+
 export type NotificationChannelEnum = 'email' | 'sms' | 'push'
 
 export type NotificationStateEnum =
@@ -500,6 +503,71 @@ export type Database = {
           ip_hash?: string | null
         }
         Update: Partial<Database['public']['Tables']['audit_log']['Insert']>
+        Relationships: []
+      }
+      incidents: {
+        Row: {
+          id: string
+          severity: IncidentSeverityEnum
+          state: IncidentStateEnum
+          category: string
+          reporter_user_id: string | null
+          business_id: string | null
+          subscription_id: string | null
+          occurrence_id: string | null
+          provider_user_id: string | null
+          narrative: string
+          involves_minor: boolean
+          respond_by: string
+          first_viewed_at: string | null
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by_user_id: string | null
+        } & Timestamps
+        Insert: {
+          id?: string
+          severity: IncidentSeverityEnum
+          state?: IncidentStateEnum
+          category: string
+          reporter_user_id?: string | null
+          business_id?: string | null
+          subscription_id?: string | null
+          occurrence_id?: string | null
+          provider_user_id?: string | null
+          narrative: string
+          involves_minor?: boolean
+          respond_by: string
+          first_viewed_at?: string | null
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['incidents']['Insert']>
+        Relationships: []
+      }
+      payout_holds: {
+        Row: {
+          id: string
+          provider_user_id: string
+          incident_id: string | null
+          reason: string
+          placed_by_user_id: string
+          placed_at: string
+          released_at: string | null
+          released_by_user_id: string | null
+          release_reason: string | null
+        }
+        Insert: {
+          id?: string
+          provider_user_id: string
+          incident_id?: string | null
+          reason: string
+          placed_by_user_id: string
+          released_at?: string | null
+          released_by_user_id?: string | null
+          release_reason?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['payout_holds']['Insert']>
         Relationships: []
       }
       message_threads: {
