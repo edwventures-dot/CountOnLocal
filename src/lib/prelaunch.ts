@@ -28,7 +28,16 @@
  */
 
 /** Paths that answer while the gate is up. Exact matches only. */
-export const PRELAUNCH_ALLOWED = new Set(['/', '/api/v1/waitlist'])
+export const PRELAUNCH_ALLOWED = new Set([
+  '/',
+  '/api/v1/waitlist',
+  // The scheduler's entry point. Allowed through because it is protected by
+  // a shared secret rather than by obscurity, and because 404ing it would
+  // make every cron run look like a failure in the dashboard. During
+  // pre-launch it has nothing to do -- there are no subscriptions -- so it
+  // costs three empty queries.
+  '/api/jobs/daily',
+])
 
 /**
  * Fail-closed in production.

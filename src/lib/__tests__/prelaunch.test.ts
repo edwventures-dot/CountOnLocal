@@ -30,10 +30,12 @@ describe('prelaunchGateEnabled', () => {
 })
 
 describe('prelaunchAllows', () => {
-  it('allows exactly the landing page and the waitlist endpoint', () => {
+  it('allows exactly the landing page, the waitlist, and the job runner', () => {
     expect(prelaunchAllows('/')).toBe(true)
     expect(prelaunchAllows('/api/v1/waitlist')).toBe(true)
-    expect(PRELAUNCH_ALLOWED.size).toBe(2)
+    // Secret-protected, and 404ing it would make every cron run look failed.
+    expect(prelaunchAllows('/api/jobs/daily')).toBe(true)
+    expect(PRELAUNCH_ALLOWED.size).toBe(3)
   })
 
   it('blocks the marketplace that is not cleared to launch', () => {
