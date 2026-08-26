@@ -17,6 +17,16 @@ export type UserRole =
 
 export type WaitlistRoleEnum = 'provider' | 'customer' | 'guardian'
 
+export type NotificationChannelEnum = 'email' | 'sms' | 'push'
+
+export type NotificationStateEnum =
+  | 'pending'
+  | 'sending'
+  | 'sent'
+  | 'failed'
+  | 'dead'
+  | 'suppressed'
+
 export type SubscriptionStateEnum =
   | 'pending'
   | 'active'
@@ -486,6 +496,42 @@ export type Database = {
           ip_hash?: string | null
         }
         Update: Partial<Database['public']['Tables']['audit_log']['Insert']>
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          id: string
+          kind: string
+          channel: NotificationChannelEnum
+          state: NotificationStateEnum
+          recipient_user_id: string | null
+          destination: string
+          subject: string | null
+          preview: string | null
+          payload: Record<string, unknown>
+          idempotency_key: string | null
+          attempts: number
+          last_error: string | null
+          next_attempt_at: string
+          sent_at: string | null
+        } & Timestamps
+        Insert: {
+          id?: string
+          kind: string
+          channel: NotificationChannelEnum
+          state?: NotificationStateEnum
+          recipient_user_id?: string | null
+          destination: string
+          subject?: string | null
+          preview?: string | null
+          payload?: Record<string, unknown>
+          idempotency_key?: string | null
+          attempts?: number
+          last_error?: string | null
+          next_attempt_at?: string
+          sent_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['notifications']['Insert']>
         Relationships: []
       }
       waitlist_signups: {

@@ -1,21 +1,25 @@
 /**
  * GET /api/jobs/daily
  *
- * The scheduler's entry point. Runs the three background jobs
- * TECHNICAL_SPEC section 20 calls for, in a fixed order, and reports each
- * one separately.
+ * The scheduler's entry point. Runs the background jobs TECHNICAL_SPEC
+ * section 20 calls for, in a fixed order, and reports each one separately.
  *
- * ## One endpoint, not three
+ * ## One endpoint, not several
  *
- * Three routes would give independent schedules, but Vercel's cheaper plans
- * cap the number of cron entries and the three jobs want the same cadence
- * anyway. One endpoint also fixes the order, which matters: extending the
- * horizon before promoting means an occurrence generated this run can be
- * marked due in the same run rather than waiting for the next one.
+ * Separate routes would give independent schedules, but Vercel's cheaper
+ * plans cap the number of cron entries and these jobs want the same cadence
+ * anyway. One endpoint also fixes the order, which matters twice: extending
+ * the horizon before promoting means an occurrence generated this run can
+ * be marked due in the same run, and dispatching notifications last means
+ * anything the earlier jobs queued leaves immediately.
  *
  * A failure in one job does not stop the others. They are independent, and
  * a settlement that cannot reach Stripe should not also stop a provider
  * seeing today's route.
+ *
+ * Notification dispatch runs last, so anything the earlier jobs queued --
+ * a cycle receipt, a failed-payment notice -- leaves in the same run
+ * instead of waiting for the next one.
  *
  * ## Why the cadence is not daily
  *
@@ -43,6 +47,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { extendHorizon, promoteDueToday } from '@/server/occurrenceJobs'
 import { runSettlement } from '@/server/settlementService'
+import { dispatchNotifications } from '@/server/notifications'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
 
@@ -50,9 +55,9 @@ export const dynamic = 'force-dynamic'
 /** Settlement talks to a payment processor; give it room. */
 export const maxDuration = 300
 
-type JobName = 'extend-horizon' | 'due-today' | 'settle'
+type JobName = 'extend-horizon' | 'due-today' | 'settle' | 'notify'
 
-const JOBS: readonly JobName[] = ['extend-horizon', 'due-today', 'settle']
+const JOBS: readonly JobName[] = ['extend-horizon', 'due-today', 'settle', 'notify']
 
 function authorized(request: Request): boolean {
   const secret = process.env['CRON_SECRET']
@@ -113,6 +118,9 @@ export async function GET(request: Request): Promise<Response> {
   await run('extend-horizon', () => extendHorizon({ db, now }))
   await run('due-today', () => promoteDueToday({ db, now }))
   await run('settle', () => runSettlement({ db, now }))
+  // Last, so anything the earlier jobs queued goes out in the same run
+  // rather than waiting four hours.
+  await run('notify', () => dispatchNotifications({ db, now }))
 
   const finishedAt = new Date().toISOString()
 
