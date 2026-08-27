@@ -18,6 +18,7 @@
 
 import { authenticate } from '@/server/auth'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { standingCreditCents, type LedgerEntry } from '@/domain/ledger'
 import { LIVE_SUBSCRIPTION_STATES, type SubscriptionState } from '@/domain/subscription'
 import { DELIVERED_STATES, type OccurrenceState } from '@/domain/occurrence'
@@ -72,8 +73,20 @@ export async function GET(): Promise<Response> {
           .in('subscription_id', subscriptionIds)
           .order('service_date', { ascending: true })
       : Promise.resolve({ data: [] as never[] }),
+    // Privileged, and only for this.
+    //
+    // ledger_entries is revoked from `authenticated` with no policy, which
+    // is right: a row carries provider earnings, the platform fee and a
+    // processor id, and none of that is the customer's to read. Reading it
+    // through the user-scoped client returned nothing at all -- no error,
+    // just an empty set -- so every customer's credit balance displayed as
+    // zero however much they were owed.
+    //
+    // Authorization is already established: subscriptionIds came from a
+    // user-scoped query above, so row level security has confirmed the
+    // caller owns every one of them. Only the aggregate leaves this file.
     subscriptionIds.length
-      ? db
+      ? supabaseAdmin()
           .from('ledger_entries')
           .select('subscription_id, kind, amount_cents')
           .in('subscription_id', subscriptionIds)
@@ -122,6 +135,14 @@ export async function GET(): Promise<Response> {
       creditCents: creditBySubscription.get(s.id) ?? 0,
       nextServiceDate: upcoming[0]?.service_date ?? null,
       upcomingCount: upcoming.length,
+      // Ids, because skipping needs one. Bounded to the next few: a
+      // customer acts on the visit in front of them, and returning the
+      // whole horizon would put dozens of dates on a phone screen.
+      upcoming: upcoming.slice(0, 4).map((o) => ({
+        occurrenceId: o.id,
+        serviceDate: o.service_date,
+        state: o.state,
+      })),
     }
   })
 

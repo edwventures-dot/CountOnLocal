@@ -70,10 +70,14 @@ export default async function AccountPage() {
         )}
 
         <Card>
-          <h2>Hire someone nearby</h2>
+          <h2>Services you buy</h2>
           <p className="muted">
-            If a neighbour gave you a link or a flyer, open it and check your address there.
+            Pause, skip a visit or cancel at any time. If a neighbour gave you a link or a flyer,
+            open it and check your address there.
           </p>
+          <Link className="btn" href="/subscriptions">
+            Your services
+          </Link>
           <p className="small muted" style={{ marginBottom: 0 }}>
             There is no search yet. <Link href="/">The front page</Link> explains why.
           </p>
