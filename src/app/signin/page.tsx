@@ -1,16 +1,24 @@
 import Link from 'next/link'
 import { AuthForm } from '@/components/AuthForm'
-import { Card, Shell } from '@/components/ui'
+import { Alert, Card, Shell } from '@/components/ui'
 
-type Props = { searchParams: Promise<{ next?: string }> }
+type Props = { searchParams: Promise<{ next?: string; problem?: string }> }
 
 export const metadata = { title: 'Sign in | Count On Local' }
 
 export default async function SignInPage({ searchParams }: Props) {
-  const { next } = await searchParams
+  const { next, problem } = await searchParams
   return (
     <Shell narrow>
       <h1>Sign in</h1>
+      {problem === 'link' ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <Alert kind="error">
+            That link did not work. It may have expired or already been used. Sign in below, or ask
+            for a new one.
+          </Alert>
+        </div>
+      ) : null}
       <Card>
         <AuthForm mode="signin" next={next} />
       </Card>
