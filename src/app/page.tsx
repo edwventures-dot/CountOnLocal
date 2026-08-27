@@ -15,6 +15,7 @@
  */
 
 import type { Metadata } from 'next'
+import { AuthFragmentNotice } from '@/components/AuthFragmentNotice'
 import { WaitlistForm } from './WaitlistForm'
 import {
   BORDER,
@@ -52,6 +53,9 @@ const CUSTOMER_SERVICES = [
 export default function Home() {
   return (
     <main style={S.page}>
+      {/* Reads an auth outcome Supabase left in the URL fragment. A
+          fragment never reaches the server, so nothing else can. */}
+      <AuthFragmentNotice />
       <div style={S.wrap}>
         <header style={S.header}>
           <div style={S.brand}>
