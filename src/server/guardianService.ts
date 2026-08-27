@@ -161,6 +161,7 @@ export async function createGuardianInvitation(args: {
       // a new token and so a new key; a double-submit of the same one does
       // not queue twice.
       idempotencyKey: `guardian_invite:${row.id}:${expiresAt}`,
+      now,
     })
 
     if (!queued.ok) {

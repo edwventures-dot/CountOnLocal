@@ -11,6 +11,7 @@ const CONFIG: ResendConfig = {
 
 function request(over: Partial<SendRequest> = {}): SendRequest {
   return {
+    id: 'ntf_1',
     channel: 'email',
     destination: 'guardian@example.com',
     subject: 'Someone needs your approval',
@@ -177,6 +178,36 @@ describe('the email is a doorbell, not a letter', () => {
   it('falls back to a subject rather than sending an empty one', () => {
     const email = renderEmail(request({ subject: '   ' }), 'https://countonlocal.com')
     expect(email.subject).toBe('Someone needs your approval')
+  })
+})
+
+describe('the provider idempotency key', () => {
+  it('is the outbox row, so a resend is a different message', async () => {
+    // Derived from kind+destination+subject it was identical for two
+    // guardian invitations to the same address, while their bodies carried
+    // different tokens -- which Resend answers with a 409 that this code
+    // treated as permanent, dropping the second invitation. A resent
+    // invitation is exactly what the feature is for.
+    fetchMock.mockResolvedValue(ok())
+    const notifier = new ResendNotifier(CONFIG)
+
+    await notifier.send(request({ id: 'ntf_1', payload: { invitationToken: 'tok_a' } }))
+    await notifier.send(request({ id: 'ntf_2', payload: { invitationToken: 'tok_b' } }))
+
+    const keys = fetchMock.mock.calls.map((c) => c[1].headers['Idempotency-Key'])
+    expect(keys).toEqual(['notification:ntf_1', 'notification:ntf_2'])
+  })
+
+  it('is stable across retries of the same row', async () => {
+    // A retry after a timeout must still be a no-op on the provider's side.
+    fetchMock.mockResolvedValue(ok())
+    const notifier = new ResendNotifier(CONFIG)
+
+    await notifier.send(request({ id: 'ntf_1' }))
+    await notifier.send(request({ id: 'ntf_1' }))
+
+    const keys = fetchMock.mock.calls.map((c) => c[1].headers['Idempotency-Key'])
+    expect(keys[0]).toBe(keys[1])
   })
 })
 

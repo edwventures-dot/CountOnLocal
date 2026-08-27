@@ -81,10 +81,20 @@ export class ResendNotifier implements Notifier {
         headers: {
           Authorization: `Bearer ${this.config.apiKey}`,
           'Content-Type': 'application/json',
-          // The outbox already refuses to send a row twice, but a retry
-          // after a timeout can arrive at the provider as a second request
-          // for the same row. This makes that a no-op on their side too.
-          'Idempotency-Key': `notification:${request.kind}:${request.destination}:${subject}`,
+          // Keyed on the outbox row, which is unique per queued message.
+          //
+          // It was previously derived from kind, destination and subject,
+          // which is the same string for two different guardian
+          // invitations to the same address -- while their bodies carry
+          // different tokens. Resend answers that with a 409
+          // invalid_idempotent_request, which this classified as permanent,
+          // so the second invitation was marked dead and silently dropped.
+          // A resent invitation is exactly the case the feature exists for.
+          //
+          // The row id is stable across retries of the same row, so a retry
+          // after a timeout is still a no-op on the provider's side, which
+          // is what the header is for.
+          'Idempotency-Key': `notification:${request.id}`,
         },
         body: JSON.stringify({
           from: this.config.fromEmail,

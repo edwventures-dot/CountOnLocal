@@ -153,6 +153,60 @@ describe('a queued notification is sent once', () => {
   })
 })
 
+describe('a message queued and dispatched in the same run leaves in that run', () => {
+  it('does not wait for the next run because two clocks disagree', async () => {
+    // The daily job takes one `now` at the top and hands it to every job,
+    // settling and then notifying, so that receipts leave immediately
+    // rather than a schedule later. Every other test in this file pins both
+    // sides to a fixed NOW far in the future, which is why this never
+    // showed up: with the column default the row was stamped by the
+    // DATABASE clock, which here runs about a second ahead of the app's, so
+    // a row enqueued at T had next_attempt_at of T+1s and a dispatch at T
+    // could not see it. On a once-a-day cron that is a day's delay.
+    //
+    // Uses the real clock deliberately. A synthetic one would hide it again.
+    const now = new Date()
+
+    const r = await enqueueNotification({
+      db: admin,
+      draft: {
+        kind: 'subscription.new_subscriber',
+        channel: 'email',
+        destination: `samerun-${stamp}@example.com`,
+        subject: 'You have a new customer',
+        preview: 'Someone nearby subscribed.',
+      },
+      now,
+    })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    madeIds.push(r.id)
+
+    const dispatched = await dispatchNotifications({ db: admin, now })
+    expect(dispatched.claimed).toBeGreaterThanOrEqual(1)
+    expect((await rowFor(r.id)).state).toBe('sent')
+  })
+
+  it('stamps the row from the clock it was given, not the database', async () => {
+    const now = new Date('2026-09-01T12:00:00Z')
+    const r = await enqueueNotification({
+      db: admin,
+      draft: {
+        kind: 'subscription.new_subscriber',
+        channel: 'email',
+        destination: `stamped-${stamp}@example.com`,
+        subject: 'You have a new customer',
+        preview: 'Someone nearby subscribed.',
+      },
+      now,
+    })
+    if (!r.ok) return
+    madeIds.push(r.id)
+
+    expect(new Date((await rowFor(r.id)).next_attempt_at).toISOString()).toBe(now.toISOString())
+  })
+})
+
 describe('a failed send is not a lost message', () => {
   it('stays in the outbox and is retried', async () => {
     notifier.setOutcome({ ok: false, retryable: true, message: 'provider timeout' })

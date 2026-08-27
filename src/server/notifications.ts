@@ -43,6 +43,11 @@ type Db = SupabaseClient<Database>
 // ---------------------------------------------------------------------------
 
 export type SendRequest = {
+  /**
+   * The outbox row. Unique per queued message, which is what a provider's
+   * idempotency key needs to be -- see the note in resendNotifier.
+   */
+  id: string
   channel: 'email' | 'sms' | 'push'
   destination: string
   subject: string | null
@@ -132,8 +137,11 @@ export async function enqueueNotification(args: {
   draft: DraftNotification
   recipientUserId?: string | null
   idempotencyKey?: string | undefined
+  /** The app's clock. See the note on next_attempt_at below. */
+  now?: Date
 }): Promise<EnqueueResult> {
   const { db, draft } = args
+  const now = args.now ?? new Date()
 
   if (!isNotificationKind(draft.kind)) {
     return { ok: false, code: 'INVALID', message: `Unknown notification kind: ${draft.kind}` }
@@ -162,6 +170,20 @@ export async function enqueueNotification(args: {
       payload: draft.payload ?? {},
       recipient_user_id: args.recipientUserId ?? null,
       idempotency_key: args.idempotencyKey ?? null,
+      // Stamped from the app's clock, not left to the column default.
+      //
+      // dispatchNotifications claims rows whose next_attempt_at has passed,
+      // comparing against a Date from the app. The retry path already sets
+      // this field the same way. Letting the initial insert fall through to
+      // the database's now() instead put the two halves of one field on two
+      // different clocks -- and the database here runs about a second ahead,
+      // so a row enqueued and dispatched in the same job run was invisible
+      // to the dispatcher and waited for the next one.
+      //
+      // That is not hypothetical: the daily job settles and then notifies in
+      // the same invocation precisely so receipts leave immediately, and on
+      // a once-a-day schedule the skew turned "immediately" into tomorrow.
+      next_attempt_at: now.toISOString(),
     })
     .select('id')
     .single()
@@ -274,6 +296,7 @@ export async function dispatchNotifications(args: {
     let outcome: SendResult
     try {
       outcome = await notifier.send({
+        id: row.id,
         channel: row.channel,
         destination: row.destination,
         subject: row.subject,
