@@ -227,6 +227,7 @@ export type Database = {
           avatar_asset_id: string | null
           state: BusinessStateEnum
           public_area_label: string | null
+          public_trust_badge: string | null
           published_at: string | null
         } & Timestamps
         Insert: {
@@ -239,6 +240,7 @@ export type Database = {
           avatar_asset_id?: string | null
           state?: BusinessStateEnum
           public_area_label?: string | null
+          public_trust_badge?: string | null
           published_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['businesses']['Insert']>

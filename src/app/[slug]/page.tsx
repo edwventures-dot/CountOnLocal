@@ -35,7 +35,7 @@ async function loadStorefront(slug: string) {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, slug, tagline, about, public_area_label, published_at')
+    .select('id, name, slug, tagline, about, public_area_label, published_at, public_trust_badge')
     .eq('slug', slug)
     .maybeSingle()
 
@@ -130,12 +130,25 @@ export default async function Storefront({ params }: Params) {
             {business.tagline ? <p style={S.tagline}>{business.tagline}</p> : null}
             <div style={S.badges}>
               {/*
-                Publishing requires a cleared guardian, and revocation pauses
-                the business -- so a page being visible at all is itself the
-                evidence for this badge. SAFETY_TRUST_POLICY section 19
-                allows only claims that are factually earned.
+                Decided at publish from the real guardian and payout state
+                and stored on the row, because provider_profiles is revoked
+                from anon and a minor's guardian state is not public data.
+
+                This used to be unconditional, reasoning that publishing
+                requires a cleared guardian. It does -- but "cleared" is
+                also true for `not_required`, an adult with no guardian at
+                all, so every adult's page claimed a supervising adult who
+                did not exist. SAFETY_TRUST_POLICY section 19 allows
+                `Guardian connected` only when factual.
+
+                NULL shows nothing. An unearned badge is worse than a
+                missing one.
               */}
-              <span style={S.badgeGreen}>Guardian connected</span>
+              {business.public_trust_badge === 'guardian_connected' ? (
+                <span style={S.badgeGreen}>Guardian connected</span>
+              ) : business.public_trust_badge === 'identity_verified' ? (
+                <span style={S.badgeGreen}>Identity verified</span>
+              ) : null}
               <span style={S.badge}>Payments handled securely</span>
               {business.public_area_label ? (
                 <span style={S.badge}>Serving {business.public_area_label}</span>

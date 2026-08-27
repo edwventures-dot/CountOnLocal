@@ -89,8 +89,8 @@ export default async function StartPage() {
             <GuardianInviteForm alreadyInvited={guardianState === 'invited'} />
           </Card>
           <p className="small muted">
-            You can build your service page while you wait. You just cannot take a paying customer
-            until your guardian is verified.
+            You can <Link href="/business">build your service page</Link> while you wait. You just
+            cannot take a paying customer until your guardian is verified.
           </p>
         </Stack>
       ) : null}
@@ -111,10 +111,9 @@ export default async function StartPage() {
               Your account can take a paying customer.
             </p>
           </Card>
-          <Alert kind="info">
-            The next step is building your service page, and that screen is not built yet. The API
-            behind it is.
-          </Alert>
+          <Link className="btn" href="/business">
+            Build my service page
+          </Link>
           <p className="small muted">
             <Link href="/account">Back to your account</Link>
           </p>

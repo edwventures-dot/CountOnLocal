@@ -16,6 +16,7 @@ import { classifyAge, ageInYearsOn, parsePlainDate } from '@/domain/age'
 import { canOfferService, flagProhibitedWording, type CatalogService } from '@/domain/catalog'
 import { checkSlug, uniqueSlug } from '@/domain/slug'
 import { publishBlockers, type ServiceReadiness, type PublishBlocker } from '@/domain/publish'
+import { isPayoutReady } from '@/domain/payout'
 import type { GuardianState } from '@/domain/guardian'
 import { NO_ACCOUNT, type StripeAccountState } from '@/domain/payout'
 import { writeAudit } from '@/server/audit'
@@ -329,13 +330,31 @@ export type PublishResult =
  * set earlier. A guardian may have revoked consent, or Stripe may have
  * restricted the account, since the provider last looked at the page.
  */
-export async function publishBusiness(args: {
+export type ReadinessResult =
+  | {
+      ok: true
+      blockers: readonly PublishBlocker[]
+      business: { id: string; slug: string; state: string; publicAreaLabel: string | null }
+      services: readonly ServiceReadiness[]
+    }
+  | { ok: false; code: 'NO_PROVIDER_PROFILE' | 'BUSINESS_NOT_FOUND' }
+
+/**
+ * Everything standing between a business and being published, without
+ * publishing it.
+ *
+ * Split out of publishBusiness so the builder screen can show a checklist
+ * rather than making the provider press publish to discover what is
+ * missing. Both call the same gathering code on purpose: a checklist that
+ * drifts from the gate is worse than no checklist, because it teaches
+ * people to distrust it.
+ */
+export async function getPublishReadiness(args: {
   db: Db
   providerUserId: string
   businessId: string
   now: Date
-  ip?: string | null
-}): Promise<PublishResult> {
+}): Promise<ReadinessResult> {
   const { db, providerUserId, businessId, now } = args
 
   const ctx = await loadProvider(db, providerUserId, now)
@@ -368,21 +387,62 @@ export async function publishBusiness(args: {
     priceCents: s.price_cents,
   }))
 
-  const blockers = publishBlockers({
-    band: ctx.band,
-    guardianState: ctx.guardianState,
-    account: ctx.account,
-    businessState: business.state,
-    publicAreaLabel: business.public_area_label,
+  return {
+    ok: true,
+    blockers: publishBlockers({
+      band: ctx.band,
+      guardianState: ctx.guardianState,
+      account: ctx.account,
+      businessState: business.state,
+      publicAreaLabel: business.public_area_label,
+      services: readiness,
+    }),
+    business: {
+      id: business.id,
+      slug: business.slug,
+      state: business.state,
+      publicAreaLabel: business.public_area_label,
+    },
     services: readiness,
-  })
+  }
+}
 
+export async function publishBusiness(args: {
+  db: Db
+  providerUserId: string
+  businessId: string
+  now: Date
+  ip?: string | null
+}): Promise<PublishResult> {
+  const { db, providerUserId, businessId, now } = args
+
+  // Re-read at publish time rather than trusting whatever the checklist
+  // said when the page rendered. A guardian may have revoked since.
+  const readiness = await getPublishReadiness({ db, providerUserId, businessId, now })
+  if (!readiness.ok) return { ok: false, code: readiness.code }
+
+  const { business, blockers } = readiness
   if (blockers.length > 0) return { ok: false, code: 'BLOCKED', blockers }
+
+  // The badge is decided here, where the real guardian and payout state
+  // are in hand, and only the conclusion is published. The storefront reads
+  // public business rows through the anon client and cannot see either.
+  //
+  // `verified` only -- not isGuardianCleared, which is also true for
+  // not_required, meaning an adult with no guardian at all. That
+  // distinction is exactly what the old unconditional badge lost.
+  const ctxForBadge = await loadProvider(db, providerUserId, now)
+  const badge =
+    ctxForBadge?.guardianState === 'verified'
+      ? 'guardian_connected'
+      : ctxForBadge && isPayoutReady(ctxForBadge.account)
+        ? 'identity_verified'
+        : null
 
   const publishedAt = now.toISOString()
   const { error } = await db
     .from('businesses')
-    .update({ state: 'published', published_at: publishedAt })
+    .update({ state: 'published', published_at: publishedAt, public_trust_badge: badge })
     .eq('id', businessId)
 
   if (error) {
@@ -479,4 +539,88 @@ export async function setServiceArea(args: {
   })
 
   return { ok: true, serviceAreaId: row.id }
+}
+
+export const serviceStateSchema = z.object({
+  state: z.enum(['active', 'paused']),
+})
+export type ServiceStateInput = z.infer<typeof serviceStateSchema>
+
+export type SetServiceStateResult =
+  | { ok: true; state: 'active' | 'paused' }
+  | {
+      ok: false
+      code: 'SERVICE_NOT_FOUND' | 'MISSING_AREA' | 'MISSING_SCHEDULE' | 'WRITE_FAILED'
+    }
+
+/**
+ * Turns a service on or off.
+ *
+ * This transition did not exist. addService created every service as
+ * `draft`, publishBlockers requires at least one `active` service, and
+ * nothing anywhere moved one between the two -- so no business could be
+ * published at all. The column and the gate both shipped; the step between
+ * them did not, and it stayed invisible because the integration tests
+ * inserted services with state 'active' directly.
+ *
+ * Activating requires a schedule and an area. Both are already publish
+ * blockers, so allowing an incomplete service to go active would only move
+ * the complaint later and phrase it worse -- "one of your services has no
+ * area" is a poorer message than refusing at the moment the provider asked
+ * for something impossible.
+ *
+ * Pausing has no such conditions. A provider who needs to stop taking work
+ * should never be blocked by a form.
+ */
+export async function setServiceState(args: {
+  db: Db
+  providerUserId: string
+  providerServiceId: string
+  input: ServiceStateInput
+  ip?: string | null
+}): Promise<SetServiceStateResult> {
+  const { db, providerUserId, providerServiceId, input } = args
+
+  const { data: service } = await db
+    .from('provider_services')
+    .select('id, state, schedule_rule, businesses!inner(provider_user_id)')
+    .eq('id', providerServiceId)
+    .eq('businesses.provider_user_id', providerUserId)
+    .maybeSingle()
+
+  if (!service) return { ok: false, code: 'SERVICE_NOT_FOUND' }
+
+  if (input.state === 'active') {
+    if (Object.keys(service.schedule_rule ?? {}).length === 0) {
+      return { ok: false, code: 'MISSING_SCHEDULE' }
+    }
+    const { count } = await db
+      .from('service_areas')
+      .select('id', { count: 'exact', head: true })
+      .eq('provider_service_id', providerServiceId)
+    if ((count ?? 0) === 0) return { ok: false, code: 'MISSING_AREA' }
+  }
+
+  const { error } = await db
+    .from('provider_services')
+    .update({ state: input.state })
+    .eq('id', providerServiceId)
+
+  if (error) {
+    console.error('[business] service state write failed', error.message)
+    return { ok: false, code: 'WRITE_FAILED' }
+  }
+
+  await writeAudit({
+    actorUserId: providerUserId,
+    actorRole: 'provider',
+    action: 'service.state_changed',
+    targetType: 'provider_service',
+    targetId: providerServiceId,
+    before: { state: service.state },
+    after: { state: input.state },
+    ip: args.ip ?? null,
+  })
+
+  return { ok: true, state: input.state }
 }

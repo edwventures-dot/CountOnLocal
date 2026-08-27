@@ -53,8 +53,8 @@ export default async function AccountPage() {
                 : 'Provider profile started.'}{' '}
               Guardian status: {profile.guardian_state.replace(/_/g, ' ')}.
             </p>
-            <Link className="btn" href="/start">
-              Continue setting up
+            <Link className="btn" href="/business">
+              Your service page
             </Link>
           </Card>
         ) : (

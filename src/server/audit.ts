@@ -63,6 +63,7 @@ export type AuditAction =
   | 'service.created'
   | 'service.wording_refused'
   | 'service.area_set'
+  | 'service.state_changed'
   | 'guardian.category_approved'
   | 'guardian.category_revoked'
   | 'account.suspended'
