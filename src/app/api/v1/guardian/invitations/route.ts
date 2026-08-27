@@ -3,11 +3,15 @@
  *
  * API_CONTRACT: "Provider creates guardian invitation."
  *
- * The raw token is returned once so the notification worker can deliver it.
- * It is deliberately not logged and not persisted -- only its hash is
- * stored. Once the outbox from TECHNICAL_SPEC section 12 exists, this
- * handler should hand the token straight to it and stop returning it to the
- * browser at all.
+ * The raw token is NOT returned. It used to be, with a note saying that
+ * should stop once the outbox existed -- the outbox exists now, and
+ * createGuardianInvitation hands the token straight to it.
+ *
+ * That note understated the problem. Returning the token to the browser
+ * that asked for it meant handing a provider the credential for their own
+ * guardian approval, and the accept path did not compare the two parties.
+ * A thirteen-year-old could approve themselves. Both halves are fixed;
+ * this is the half that stops the token being reachable at all.
  */
 
 import { authenticate, clientIp } from '@/server/auth'
@@ -76,7 +80,7 @@ export async function POST(req: Request): Promise<Response> {
       relationshipId: result.relationshipId,
       state: result.state,
       expiresAt: result.expiresAt,
-      invitationToken: result.token,
+      // No token. It goes to the guardian's inbox and nowhere else.
     },
     201,
   )

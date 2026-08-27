@@ -264,6 +264,54 @@ describe('guardian invitation', () => {
     expect(data?.invitation_expires_at).toBeTruthy()
   })
 
+  it('refuses a provider accepting their own invitation', async () => {
+    // This was reachable. The invitations endpoint returned the raw token
+    // to the browser that asked for it -- the provider's own -- and accept
+    // never compared the two parties, so a thirteen-year-old could invite
+    // any address, read the token from the response, and approve
+    // themselves. It stopped at guardian_started rather than verified, so
+    // no customer could be charged; that was the NEXT control holding, not
+    // this one.
+    const self = await acceptGuardianInvitation({
+      adminDb: admin,
+      token: invitationToken,
+      guardianUserId: provider.domainId,
+      now: new Date(),
+    })
+
+    expect(self.ok).toBe(false)
+    // INVALID_TOKEN, not a distinct code: naming the reason would confirm
+    // to whoever tried it that the token was real.
+    if (!self.ok) expect(self.code).toBe('INVALID_TOKEN')
+
+    // And nothing moved.
+    expect(await guardianStateOf(provider.domainId)).toBe('invited')
+    const { data: rel } = await admin
+      .from('guardian_relationships')
+      .select('guardian_user_id, state')
+      .eq('id', relationshipId)
+      .single()
+    expect(rel!.guardian_user_id).toBeNull()
+    expect(rel!.state).toBe('invited')
+  })
+
+  it('does not hand the invitation token back to the provider', async () => {
+    // The token is the credential for the approval. It belongs in the
+    // guardian's inbox and nowhere else.
+    const invite = await createGuardianInvitation({
+      db: admin,
+      providerUserId: provider.domainId,
+      input: { email: GUARDIAN_EMAIL },
+      now: new Date(),
+    })
+    expect(invite.ok).toBe(true)
+    if (!invite.ok) return
+    // The service still returns it -- it has to, to enqueue the email. The
+    // route is what must not pass it on, asserted in the endpoint tests.
+    invitationToken = invite.token
+    expect(invite.token).toBeTruthy()
+  })
+
   it('rejects a wrong token', async () => {
     const bad = await acceptGuardianInvitation({
       adminDb: admin,

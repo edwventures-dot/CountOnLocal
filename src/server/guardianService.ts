@@ -212,6 +212,27 @@ export async function acceptGuardianInvitation(args: {
 
   if (!rel) return { ok: false, code: 'INVALID_TOKEN' }
 
+  // A provider cannot be their own guardian.
+  //
+  // This was reachable. POST /v1/guardian/invitations returned the raw
+  // token to the browser that asked for it -- the provider's own -- and
+  // nothing here compared the two parties, so a thirteen-year-old could
+  // invite anybody, read the token out of the response, and accept it
+  // while signed in as themselves. That produced a real relationship with
+  // provider_user_id = guardian_user_id, granted them the guardian role,
+  // and moved them to guardian_started.
+  //
+  // It stopped short of `verified`, so no customer could be charged. That
+  // is the gate working, not this one -- and a safety control should not
+  // depend on the next control catching what it missed.
+  //
+  // Reported as INVALID_TOKEN rather than a distinct code. Naming the
+  // reason would confirm to whoever tried it that the token was real.
+  if (rel.provider_user_id === guardianUserId) {
+    console.warn('[guardian] refused a self-accept', { relationshipId: rel.id })
+    return { ok: false, code: 'INVALID_TOKEN' }
+  }
+
   if (isExpired(rel.invitation_expires_at, now)) {
     const expiry = transition(rel.state, 'EXPIRE')
     if (expiry.ok) {

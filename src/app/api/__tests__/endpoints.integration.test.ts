@@ -135,6 +135,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  await admin.from('notifications').delete().eq('destination', GUARDIAN_EMAIL)
   for (const u of [provider, guardian]) {
     if (!u) continue
     await admin.from('audit_log').delete().eq('actor_user_id', u.domainId)
@@ -242,9 +243,24 @@ describe('POST /v1/guardian/invitations', () => {
     })
     expect(res.status).toBe(201)
     expect(res.body.state).toBe('invited')
-    expect(typeof res.body.invitationToken).toBe('string')
     relationshipId = res.body.relationshipId
-    invitationToken = res.body.invitationToken
+    invitationToken = await tokenFromOutbox()
+  })
+
+  it('does not return the token to the provider who asked for it', async () => {
+    // It used to. The token is the credential for the provider's own
+    // guardian approval, and the accept path did not compare the two
+    // parties, so a thirteen-year-old could read it out of this response
+    // and approve themselves.
+    const res = await call('POST', '/api/v1/guardian/invitations', {
+      cookie: provider.cookie,
+      body: { email: GUARDIAN_EMAIL },
+    })
+    expect(res.status).toBe(201)
+    expect(res.body.invitationToken).toBeUndefined()
+    expect(JSON.stringify(res.body)).not.toContain(await tokenFromOutbox())
+    relationshipId = res.body.relationshipId
+    invitationToken = await tokenFromOutbox()
   })
 
   it('binds the invitation to the session, not to anything in the body', async () => {
@@ -261,12 +277,42 @@ describe('POST /v1/guardian/invitations', () => {
       .eq('id', res.body.relationshipId)
       .single()
     expect(data?.provider_user_id).toBe(provider.domainId)
-    invitationToken = res.body.invitationToken
+    invitationToken = await tokenFromOutbox()
     relationshipId = res.body.relationshipId
   })
 })
 
+/**
+ * The token, read the way the guardian gets it: out of the outbox row that
+ * becomes their email. It is hashed in guardian_relationships and no longer
+ * returned by the API, so this is the only place a test can obtain it --
+ * which is the point.
+ */
+async function tokenFromOutbox(): Promise<string> {
+  const { data } = await admin
+    .from('notifications')
+    .select('payload, created_at')
+    .eq('kind', 'guardian.approval_requested')
+    .eq('destination', GUARDIAN_EMAIL)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return String((data?.payload as Record<string, unknown>)?.['invitationToken'] ?? '')
+}
+
 describe('POST /v1/guardian/invitations/{token}/accept', () => {
+  it('refuses the provider accepting their own invitation', async () => {
+    const res = await call(
+      'POST',
+      `/api/v1/guardian/invitations/${invitationToken}/accept`,
+      { cookie: provider.cookie },
+    )
+    // Same 404 as a token that does not exist. Naming the reason would
+    // confirm the token was real.
+    expect(res.status).toBe(404)
+    expect(res.body.error.code).toBe('INVALID_TOKEN')
+  })
+
   it('returns 404 for a token that does not exist', async () => {
     const res = await call(
       'POST',

@@ -266,3 +266,40 @@ a {
   background: #eef7f2;
   color: #0f5c3e;
 }
+
+/* --- onboarding steps ---------------------------------------------------- */
+
+.steps {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  font-size: 14px;
+}
+
+.steps__item {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--col-border);
+  background: var(--col-white);
+  color: var(--col-muted);
+}
+
+.steps__item--current {
+  border-color: var(--col-ink);
+  color: var(--col-ink);
+  font-weight: 700;
+}
+
+.steps__item--done {
+  border-color: var(--col-green);
+  color: var(--col-green);
+}
+
+/* The tick is decorative; the state is already in the border and colour,
+   and a screen reader gets the label either way. */
+.steps__item--done::before {
+  content: '✓ ';
+}

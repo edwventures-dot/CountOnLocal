@@ -53,10 +53,9 @@ export default async function AccountPage() {
                 : 'Provider profile started.'}{' '}
               Guardian status: {profile.guardian_state.replace(/_/g, ' ')}.
             </p>
-            <Alert kind="info">
-              The provider dashboard is not built yet. The API behind it is — business builder,
-              route, payouts — but there is no screen for it.
-            </Alert>
+            <Link className="btn" href="/start">
+              Continue setting up
+            </Link>
           </Card>
         ) : (
           <Card>
@@ -64,10 +63,9 @@ export default async function AccountPage() {
             <p className="muted">
               Run something on your street — bins, lawns, dog walking. You keep the price you set.
             </p>
-            <Alert kind="info">
-              Provider onboarding is not built yet. It needs a date of birth, and if you are under
-              18, a guardian to approve before you can take a paying customer.
-            </Alert>
+            <Link className="btn" href="/start">
+              Start a service
+            </Link>
           </Card>
         )}
 
