@@ -61,7 +61,8 @@ import { timingSafeEqual } from 'node:crypto'
 import { extendHorizon, promoteDueToday } from '@/server/occurrenceJobs'
 import { runSettlement } from '@/server/settlementService'
 import { runReferralRewards } from '@/server/referralService'
-import { dispatchNotifications } from '@/server/notifications'
+import { dispatchNotifications, setNotifier } from '@/server/notifications'
+import { ResendNotifier, resendConfigFromEnv } from '@/server/resendNotifier'
 import { purgeExpiredMessages } from '@/server/messageService'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
@@ -153,6 +154,14 @@ export async function GET(request: Request): Promise<Response> {
   await run('referral-rewards', () => runReferralRewards({ db, now }))
   // Last, so anything the earlier jobs queued goes out in the same run
   // rather than waiting four hours.
+  // Installed here rather than at import time: this is the only place that
+  // drains the outbox, and a sender constructed at module load would read
+  // the environment before the runtime has finished providing it. With no
+  // key configured this leaves UnconfiguredNotifier in place, which refuses
+  // loudly rather than dropping mail silently.
+  const emailConfig = resendConfigFromEnv(process.env)
+  if (emailConfig) setNotifier(new ResendNotifier(emailConfig))
+
   await run('notify', () => dispatchNotifications({ db, now }))
   // PRD 17 requires the retention policy be implemented, not merely
   // documented. Bodies past their date are redacted; the row stays, so the

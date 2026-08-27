@@ -15,6 +15,7 @@ import {
   invitationExpiryFrom,
   isExpired,
 } from '@/server/invitationToken'
+import { enqueueNotification } from '@/server/notifications'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
@@ -127,6 +128,51 @@ export async function createGuardianInvitation(args: {
     after: { state: result.to },
     ip: args.ip ?? null,
   })
+
+  // The invitation only exists once somebody can receive it.
+  //
+  // Enqueued after the audit and after the state change, so a failure to
+  // queue leaves an invited relationship somebody can resend rather than a
+  // sent email pointing at a relationship that was never written. The
+  // outbox is the delivery guarantee from here; this call only has to
+  // record the intent.
+  //
+  // The token goes in the payload rather than the preview because a
+  // guardian has no account yet and cannot be asked to sign in first --
+  // renderEmail turns it into a link, and checkDraft has already refused
+  // any draft that put it somewhere visible.
+  if (input.email) {
+    const queued = await enqueueNotification({
+      db,
+      recipientUserId: null,
+      draft: {
+        kind: 'guardian.approval_requested',
+        channel: 'email',
+        destination: input.email,
+        subject: 'Someone needs your approval',
+        // No name, no service, no address. A guardian invitation arrives at
+        // an address we have never verified, given to us by a minor, and it
+        // may be read by anyone who can see that inbox. What is being
+        // approved is behind the link.
+        preview: 'A young person near you asked you to approve their account.',
+        payload: { invitationToken: token, relationshipId: row.id },
+      },
+      // One live invitation per relationship. A resend after an expiry gets
+      // a new token and so a new key; a double-submit of the same one does
+      // not queue twice.
+      idempotencyKey: `guardian_invite:${row.id}:${expiresAt}`,
+    })
+
+    if (!queued.ok) {
+      // Not fatal to the invitation, which exists and can be resent. Loud,
+      // because a minor is now waiting on an email nobody queued.
+      console.error('[guardian] invitation notification not queued', {
+        relationshipId: row.id,
+        code: queued.code,
+        message: queued.message,
+      })
+    }
+  }
 
   return { ok: true, relationshipId: row.id, token, expiresAt, state: result.to }
 }

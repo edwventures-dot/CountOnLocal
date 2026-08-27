@@ -132,6 +132,7 @@ afterAll(async () => {
     await admin.auth.admin.deleteUser(u.authId)
   }
   if (relationshipId) await admin.from('audit_log').delete().eq('target_id', relationshipId)
+  await admin.from('notifications').delete().eq('destination', GUARDIAN_EMAIL)
 })
 
 describe('provider onboarding', () => {
@@ -212,6 +213,42 @@ describe('guardian invitation', () => {
     invitationToken = result.token
     expect(result.state).toBe('invited')
     expect(await guardianStateOf(provider.domainId)).toBe('invited')
+  })
+
+  it('queues an email, because an invitation nobody receives is not one', async () => {
+    // The gap this closes: the outbox and the state machine both existed
+    // and nothing wrote to the outbox, so a provider aged 13-17 could never
+    // reach verified and therefore could never take a customer.
+    const { data } = await admin
+      .from('notifications')
+      .select('kind, channel, destination, subject, preview, payload, state')
+      .eq('kind', 'guardian.approval_requested')
+      .eq('destination', GUARDIAN_EMAIL)
+
+    expect(data).toHaveLength(1)
+    expect(data![0]!.channel).toBe('email')
+    expect(data![0]!.state).toBe('pending')
+  })
+
+  it('puts the token in the payload and nothing identifying in the preview', async () => {
+    const { data } = await admin
+      .from('notifications')
+      .select('subject, preview, payload')
+      .eq('kind', 'guardian.approval_requested')
+      .eq('destination', GUARDIAN_EMAIL)
+      .single()
+
+    // The address was given to us by a minor and has never been verified.
+    // Whoever can see that inbox learns that somebody wants approval, and
+    // not who, for what, or where.
+    const visible = `${data!.subject} ${data!.preview}`
+    expect(visible).not.toContain(provider.domainId)
+    expect(visible.toLowerCase()).not.toContain('jordan')
+    expect(visible).not.toMatch(/\d{1,5}\s+\w+\s+(street|st|road|rd|avenue|ave)/i)
+
+    // The token travels where only the renderer sees it.
+    expect((data!.payload as Record<string, unknown>)['invitationToken']).toBe(invitationToken)
+    expect(visible).not.toContain(invitationToken)
   })
 
   it('stores only a hash of the token, never the token', async () => {
