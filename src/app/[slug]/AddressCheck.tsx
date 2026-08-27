@@ -111,9 +111,15 @@ export function AddressCheck({ providerServiceId }: { providerServiceId: string 
         <div style={S.yes} role="status">
           <strong>Good news — this address is on the route.</strong>
           <span style={S.normalized}>{outcome.normalized}</span>
-          <button type="button" style={S.subscribe}>
+          {/*
+            Carries only the service id. The address the customer just
+            typed is deliberately NOT put in the URL -- it would end up in
+            history, in a referrer header and in any log that records a
+            path. Checkout asks for it again behind a sign-in.
+          */}
+          <a href={`/checkout/${providerServiceId}`} style={S.subscribe}>
             Subscribe
-          </button>
+          </a>
         </div>
       ) : null}
 

@@ -217,6 +217,24 @@ describe('POST /v1/provider/onboarding/start', () => {
   })
 })
 
+describe('provisioning', () => {
+  it('grants the customer role to every new account', async () => {
+    // This did not happen. subscription:create belongs to the customer
+    // role, providerOnboarding grants provider and acceptGuardianInvitation
+    // grants guardian, and nothing granted customer -- so no account could
+    // subscribe to anything and the whole customer side was unreachable.
+    //
+    // Being a customer is not a privileged state. It is what a signed-in
+    // person is by default; provider and guardian are the earned ones.
+    const { data } = await admin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', provider.domainId)
+
+    expect((data ?? []).map((r) => r.role)).toContain('customer')
+  })
+})
+
 describe('POST /v1/guardian/invitations', () => {
   it('refuses a caller without the provider role', async () => {
     const res = await call('POST', '/api/v1/guardian/invitations', {
