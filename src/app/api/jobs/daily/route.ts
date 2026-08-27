@@ -21,17 +21,30 @@
  * a cycle receipt, a failed-payment notice -- leaves in the same run
  * instead of waiting for the next one.
  *
- * ## Why the cadence is not daily
+ * ## The cadence, and what it costs
  *
  * "Daily" is a lie in a product with time zones. A run at 08:00 UTC is
- * already Tuesday in Chicago but still Monday evening in Honolulu, so a
- * single daily run leaves somebody's route unpromoted for hours -- and
- * which somebody depends on the hour chosen.
+ * already Tuesday in Chicago but still Monday evening in Honolulu, so the
+ * hour chosen decides whose route is wrong.
  *
- * Running every four hours means every zone gets promoted within four hours
- * of its own midnight, which for a route starting at 08:00 local is
- * comfortably early. The jobs are all idempotent, so the extra runs cost a
- * few queries and change nothing.
+ * Four-hourly would fix that -- every zone promoted within four hours of
+ * its own midnight -- and that is what vercel.json asked for until the
+ * hosting plan turned out to be Hobby, which caps cron at one invocation a
+ * day. So the schedule is 11:00 UTC, picked because it is past local
+ * midnight in every US zone: 01:00 in Hawaii, 03:00 Pacific, 07:00 Eastern
+ * at the worst end of daylight saving. Every route gets promoted before its
+ * day starts, which is the property that actually matters.
+ *
+ * What the single run costs, stated rather than buried: notifications
+ * dispatch once a day instead of six times, so a guardian invitation
+ * queued just after a run waits until the next one. Nothing enqueues
+ * notifications yet, so today that is theoretical -- but it stops being
+ * theoretical the moment an email provider is wired, and at that point the
+ * choice is a paid plan, an external scheduler hitting this endpoint with
+ * the same secret, or accepting the delay.
+ *
+ * The jobs are all idempotent, so a more frequent schedule can be restored
+ * by editing one line and costs only a few queries.
  *
  * ## Authentication
  *
