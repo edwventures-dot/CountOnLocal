@@ -1,0 +1,268 @@
+/**
+ * The one stylesheet.
+ *
+ * Until now every page defined its own colours inline, and src/lib/brand.ts
+ * carried a note that they "should be pointed here on their next edit".
+ * This is that place. The tokens are copied from assets/brand-tokens.css --
+ * BRAND_GUIDE and README both note the product may be forced to rename, and
+ * centralising the values is what makes a rename a token edit rather than a
+ * redesign.
+ *
+ * Plain CSS, no framework. The component set is small enough that a utility
+ * framework would be more configuration than saving, and inline styles were
+ * already proving hard to keep consistent across two pages, let alone the
+ * dozen the UX spec describes.
+ */
+
+:root {
+  --col-ink: #14263a;
+  --col-lime: #c7f34a;
+  --col-cream: #f6f3ea;
+  --col-white: #ffffff;
+  --col-coral: #ff765c;
+  --col-blue: #3b82f6;
+  --col-green: #16875b;
+  --col-amber: #b7791f;
+  --col-red: #c43e3e;
+  --col-muted: #607080;
+  --col-border: #dde3e6;
+  --col-radius-card: 18px;
+  --col-radius-control: 12px;
+  --col-shadow: 0 12px 32px rgba(20, 38, 58, 0.08);
+  --col-font-heading: Manrope, Inter, ui-sans-serif, system-ui, sans-serif;
+  --col-font-body: Inter, ui-sans-serif, system-ui, sans-serif;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--col-cream);
+  color: var(--col-ink);
+  font-family: var(--col-font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--col-font-heading);
+  line-height: 1.2;
+  margin: 0 0 var(--space-3);
+}
+
+h1 {
+  font-size: 30px;
+  letter-spacing: -0.02em;
+}
+h2 {
+  font-size: 22px;
+}
+h3 {
+  font-size: 17px;
+}
+
+p {
+  margin: 0 0 var(--space-4);
+}
+
+a {
+  color: var(--col-ink);
+  text-decoration-color: var(--col-muted);
+  text-underline-offset: 3px;
+}
+
+/**
+ * Focus is never removed, only restyled. A keyboard user who cannot see
+ * where they are cannot use the form, and the age of the people on this
+ * platform makes assistive-technology support less optional than usual,
+ * not more.
+ */
+:focus-visible {
+  outline: 3px solid var(--col-blue);
+  outline-offset: 2px;
+}
+
+/* --- layout -------------------------------------------------------------- */
+
+.shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell__body {
+  flex: 1;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4) var(--space-7);
+}
+
+.shell__narrow {
+  max-width: 420px;
+}
+
+.topbar {
+  border-bottom: 1px solid var(--col-border);
+  background: var(--col-white);
+}
+
+.topbar__inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.topbar__brand {
+  font-family: var(--col-font-heading);
+  font-weight: 800;
+  font-size: 17px;
+  text-decoration: none;
+}
+
+.card {
+  background: var(--col-white);
+  border: 1px solid var(--col-border);
+  border-radius: var(--col-radius-card);
+  box-shadow: var(--col-shadow);
+  padding: var(--space-5);
+}
+
+.stack > * + * {
+  margin-top: var(--space-4);
+}
+
+.muted {
+  color: var(--col-muted);
+}
+
+.small {
+  font-size: 14px;
+}
+
+/* --- controls ------------------------------------------------------------ */
+
+.field {
+  display: block;
+}
+
+.field__label {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: var(--space-1);
+}
+
+.field__hint {
+  display: block;
+  color: var(--col-muted);
+  font-size: 13px;
+  margin-bottom: var(--space-1);
+}
+
+.field__input {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  padding: 11px 12px;
+  border: 1px solid var(--col-border);
+  border-radius: var(--col-radius-control);
+  background: var(--col-white);
+}
+
+.field__input[aria-invalid='true'] {
+  border-color: var(--col-red);
+}
+
+.field__error {
+  display: block;
+  color: var(--col-red);
+  font-size: 13px;
+  margin-top: var(--space-1);
+}
+
+.btn {
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 12px 18px;
+  border-radius: var(--col-radius-control);
+  border: 1px solid transparent;
+  background: var(--col-ink);
+  color: var(--col-white);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.btn--full {
+  width: 100%;
+}
+
+.btn--secondary {
+  background: var(--col-white);
+  color: var(--col-ink);
+  border-color: var(--col-border);
+}
+
+.btn--link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--col-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+}
+
+/* --- messages ------------------------------------------------------------ */
+
+.alert {
+  border-radius: var(--col-radius-control);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid;
+  font-size: 15px;
+}
+
+.alert--error {
+  border-color: var(--col-red);
+  background: #fdf1f1;
+  color: #8a2b2b;
+}
+
+.alert--info {
+  border-color: var(--col-border);
+  background: var(--col-cream);
+}
+
+.alert--success {
+  border-color: var(--col-green);
+  background: #eef7f2;
+  color: #0f5c3e;
+}
