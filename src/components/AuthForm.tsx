@@ -37,13 +37,17 @@ import {
   checkSignupCredentials,
   interpretSignupError,
   normalizeEmail,
+  safeNextPath,
   SIGNUP_CONFIRMATION_NOTICE,
 } from '@/domain/credentials'
 import { Alert, Field } from '@/components/ui'
 
 type Mode = 'signin' | 'signup'
 
-export function AuthForm({ mode }: { mode: Mode }) {
+export function AuthForm({ mode, next }: { mode: Mode; next?: string | undefined }) {
+  // Validated rather than trusted: `next` comes from whoever wrote the
+  // link. safeNextPath refuses anything that leaves the site.
+  const destination = safeNextPath(next)
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -107,7 +111,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
       // refresh() so the server components re-render against the new
       // cookies; push() alone can show a cached signed-out shell.
       router.refresh()
-      router.push('/account')
+      router.push(destination)
     } catch {
       setError('We could not reach the server. Please try again.')
     } finally {

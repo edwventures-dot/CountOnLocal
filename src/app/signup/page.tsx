@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { AuthForm } from '@/components/AuthForm'
 import { Card, Shell } from '@/components/ui'
 
+type Props = { searchParams: Promise<{ next?: string }> }
+
 export const metadata = { title: 'Create an account | Count On Local' }
 
 /**
@@ -14,7 +16,8 @@ export const metadata = { title: 'Create an account | Count On Local' }
  * who might only ever be a customer -- and CLAUDE.md rule 1 keeps exact age
  * out of anywhere it is not needed.
  */
-export default function SignUpPage() {
+export default async function SignUpPage({ searchParams }: Props) {
+  const { next } = await searchParams
   return (
     <Shell narrow>
       <h1>Create an account</h1>
@@ -23,10 +26,11 @@ export default function SignUpPage() {
         service, or do both.
       </p>
       <Card>
-        <AuthForm mode="signup" />
+        <AuthForm mode="signup" next={next} />
       </Card>
       <p className="small muted" style={{ marginTop: 'var(--space-4)' }}>
-        Already have an account? <Link href="/signin">Sign in</Link>
+        Already have an account?{' '}
+        <Link href={next ? `/signin?next=${encodeURIComponent(next)}` : '/signin'}>Sign in</Link>
       </p>
     </Shell>
   )

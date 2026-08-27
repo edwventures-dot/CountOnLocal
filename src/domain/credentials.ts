@@ -181,3 +181,36 @@ export function interpretSignupError(raw: string): SignupOutcome {
   // time they add an error case.
   return { kind: 'retry', message: 'We could not create that account. Please try again.' }
 }
+
+/**
+ * Where to send someone after they sign in.
+ *
+ * A `next` parameter is a redirect target supplied by whoever wrote the
+ * link, so it is treated as hostile. Only a path on this site is allowed:
+ * anything absolute, protocol-relative, or otherwise pointing off-site
+ * falls back to the account page.
+ *
+ * The case that matters is a guardian invitation. That link arrives by
+ * email at an address a minor typed in, and a `next` that could carry an
+ * external URL would turn our sign-in page into a credible way to bounce
+ * that person somewhere else -- which is exactly the shape of a phishing
+ * flow, wearing our domain.
+ *
+ * `//evil.example` is the one people forget. A browser reads it as
+ * protocol-relative and goes to evil.example, even though it starts with a
+ * slash.
+ */
+export const DEFAULT_LANDING = '/account'
+
+export function safeNextPath(next: string | null | undefined): string {
+  if (!next) return DEFAULT_LANDING
+
+  const value = next.trim()
+  if (!value.startsWith('/')) return DEFAULT_LANDING
+  // Protocol-relative, and the backslash variant some browsers normalise.
+  if (value.startsWith('//') || value.startsWith('/\\')) return DEFAULT_LANDING
+  // A control character can be used to break a URL parser's expectations.
+  if (/[\u0000-\u001f\u007f]/.test(value)) return DEFAULT_LANDING
+
+  return value
+}

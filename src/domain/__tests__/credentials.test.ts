@@ -3,9 +3,11 @@ import {
   checkEmail,
   checkPassword,
   checkSignupCredentials,
+  DEFAULT_LANDING,
   interpretSignupError,
   normalizeEmail,
   PASSWORD_MIN_LENGTH,
+  safeNextPath,
   SIGNUP_CONFIRMATION_NOTICE,
 } from '../credentials'
 
@@ -157,5 +159,38 @@ describe('sign-up does not reveal whether an address is taken', () => {
     expect(interpretSignupError('unheard of failure').message).toBe(
       'We could not create that account. Please try again.',
     )
+  })
+})
+
+describe('the post-sign-in redirect cannot leave the site', () => {
+  it('keeps an ordinary path', () => {
+    expect(safeNextPath('/guardian/invitations/tok_abc')).toBe('/guardian/invitations/tok_abc')
+  })
+
+  it('falls back when there is nothing', () => {
+    expect(safeNextPath(null)).toBe(DEFAULT_LANDING)
+    expect(safeNextPath('')).toBe(DEFAULT_LANDING)
+    expect(safeNextPath('   ')).toBe(DEFAULT_LANDING)
+  })
+
+  it('refuses an absolute url', () => {
+    expect(safeNextPath('https://evil.example/steal')).toBe(DEFAULT_LANDING)
+    expect(safeNextPath('http://evil.example')).toBe(DEFAULT_LANDING)
+  })
+
+  it('refuses a protocol-relative url, which is the one people forget', () => {
+    // A browser reads // as protocol-relative and leaves the site, even
+    // though it starts with a slash.
+    expect(safeNextPath('//evil.example/steal')).toBe(DEFAULT_LANDING)
+    expect(safeNextPath('/\\evil.example')).toBe(DEFAULT_LANDING)
+  })
+
+  it('refuses a javascript url', () => {
+    expect(safeNextPath('javascript:alert(1)')).toBe(DEFAULT_LANDING)
+  })
+
+  it('refuses control characters used to confuse a url parser', () => {
+    expect(safeNextPath('/\u0000//evil.example')).toBe(DEFAULT_LANDING)
+    expect(safeNextPath('/\n//evil.example')).toBe(DEFAULT_LANDING)
   })
 })
