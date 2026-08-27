@@ -53,9 +53,14 @@ export default async function AccountPage() {
                 : 'Provider profile started.'}{' '}
               Guardian status: {profile.guardian_state.replace(/_/g, ' ')}.
             </p>
-            <Link className="btn" href="/business">
-              Your service page
-            </Link>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+              <Link className="btn" href="/today">
+                Today&rsquo;s round
+              </Link>
+              <Link className="btn btn--secondary" href="/business">
+                Your service page
+              </Link>
+            </div>
           </Card>
         ) : (
           <Card>

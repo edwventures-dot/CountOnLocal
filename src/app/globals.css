@@ -365,3 +365,28 @@ input[type='range'].field__input {
   padding-top: var(--space-3);
   font-weight: 700;
 }
+
+/* --- route stops --------------------------------------------------------- */
+
+/**
+ * Bigger than the 44px UX_UI_SPEC asks for. This is tapped outdoors, one
+ * handed, and hitting "skip" instead of "done" costs somebody money.
+ */
+.btn--tall {
+  min-height: 56px;
+  font-size: 17px;
+}
+
+/**
+ * Gate codes and similar. Marked so it reads as restricted rather than as
+ * another line of the address -- rule 13 keeps these out of notifications,
+ * logs and analytics, and the provider should see that this one is
+ * different.
+ */
+.access-note {
+  border-left: 3px solid var(--col-amber);
+  background: #fdf8ee;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 0 var(--col-radius-control) var(--col-radius-control) 0;
+  font-size: 15px;
+}
