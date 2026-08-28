@@ -127,3 +127,63 @@ export function quoteCycle(args: {
 export function formatCents(cents: number, currency = 'USD'): string {
   return (cents / 100).toLocaleString('en-US', { style: 'currency', currency })
 }
+
+/**
+ * The most a single service may bill in one cycle.
+ *
+ * From the owner's legal/safety pass: "$50 max per service, per cycle."
+ * The purpose is stated there too -- it keeps every dispute trivial and
+ * blocks using the platform to move real money ("no $1,000 jobs").
+ *
+ * ## This caps the CYCLE TOTAL, not the listed price
+ *
+ * Those are different numbers and the difference is large. A $20/week
+ * service billed every 4 weeks charges $80 in one go. Capping the listed
+ * price at $50 would leave that $80 charge legal, and the exposure per
+ * dispute is the charge, not the price -- so the cap has to sit on what
+ * actually gets billed.
+ *
+ * The consequence, which is worth knowing before this ships: on a 4-week
+ * cycle a weekly service is limited to $12.50/week. If that is too low for
+ * yard work, the answer is to raise the cap or shorten the cycle, not to
+ * move the cap onto the listed price.
+ *
+ * Configuration, never a constant read at the call site -- same rule as the
+ * platform fee.
+ */
+export const MAX_CYCLE_TOTAL_CENTS = 5_000
+
+export type PriceCapCheck =
+  | { ok: true; cycleTotalCents: number }
+  | { ok: false; cycleTotalCents: number; maxCents: number; message: string }
+
+/**
+ * Whether a service may be priced this way.
+ *
+ * Uses the same occurrence arithmetic as quoteCycle rather than repeating
+ * it, so a change to how cycles are counted cannot leave the cap checking
+ * a different number from the one the customer is charged.
+ */
+export function checkPriceCap(args: {
+  priceCents: number
+  priceUnit: PriceUnit
+  billingCycleWeeks: number
+  maxCents?: number
+}): PriceCapCheck {
+  const maxCents = args.maxCents ?? MAX_CYCLE_TOTAL_CENTS
+  const occurrences = args.priceUnit === 'week' ? args.billingCycleWeeks : 1
+  const cycleTotalCents = args.priceCents * occurrences
+
+  if (cycleTotalCents <= maxCents) return { ok: true, cycleTotalCents }
+
+  const perUnit = Math.floor(maxCents / occurrences)
+  return {
+    ok: false,
+    cycleTotalCents,
+    maxCents,
+    message:
+      occurrences === 1
+        ? `The most a service can charge in one cycle is ${formatCents(maxCents)}.`
+        : `That works out to ${formatCents(cycleTotalCents)} every ${args.billingCycleWeeks} weeks, and the most a service can charge in one cycle is ${formatCents(maxCents)}. Try ${formatCents(perUnit)} or less per ${args.priceUnit}.`,
+  }
+}

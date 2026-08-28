@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { authenticate } from '@/server/auth'
 import { PauseBusiness, RevokeApproval } from '@/components/GuardianControls'
+import { ConsentForm, MakeListingPrivate } from '@/components/ConsentForm'
 import { SignOutButton } from '@/components/SignOutButton'
 import { Alert, Card, Shell, Stack } from '@/components/ui'
 
@@ -18,6 +19,7 @@ type Dashboard = {
     state: string
     publicUrl: string
     isLive: boolean
+    searchable: boolean
   } | null
   services: Array<{
     id: string
@@ -114,6 +116,49 @@ export default async function GuardianPage() {
               ? `Until your identity is confirmed, ${name} cannot take a paying customer, and addresses stay hidden from this page.`
               : `${name} cannot take a paying customer while this is unresolved.`}
           </Alert>
+        ) : null}
+
+        {!verified && d.relationship.state === 'guardian_started' ? (
+          <Card>
+            <h2>Confirm your consent</h2>
+            {/*
+              Signing this is what verifies the relationship. Until it
+              exists, {name} cannot take a paying customer -- the record is
+              the permission, not a box somebody ticked once.
+            */}
+            <ConsentForm
+              kind="guardian_consent"
+              minorName={name}
+              submitLabel="I agree, and I am the guardian"
+            />
+          </Card>
+        ) : null}
+
+        {verified && d.business ? (
+          <Card>
+            <h2>Being found</h2>
+            {d.business.searchable ? (
+              <>
+                <p className="muted small">
+                  {name}&rsquo;s listing appears in Count On Local search. You can remove it at any
+                  time; the link and QR code keep working either way.
+                </p>
+                <MakeListingPrivate />
+              </>
+            ) : (
+              <>
+                <p className="muted small">
+                  {name} is reachable only by the link or QR code you share. That is the default,
+                  and it is the flow the product is built around.
+                </p>
+                <ConsentForm
+                  kind="public_listing_consent"
+                  minorName={name}
+                  submitLabel="Make the listing findable in search"
+                />
+              </>
+            )}
+          </Card>
         ) : null}
 
         {d.business ? (

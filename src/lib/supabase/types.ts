@@ -21,6 +21,11 @@ export type ReviewStateEnum = 'published' | 'hidden' | 'removed'
 
 export type ReferralStateEnum = 'pending' | 'qualified' | 'paid' | 'void'
 
+export type ConsentKindEnum =
+  | 'guardian_consent'
+  | 'public_listing_consent'
+  | 'customer_attestation'
+
 export type MessageStateEnum = 'delivered' | 'blocked' | 'redacted'
 
 export type IncidentStateEnum = 'open' | 'investigating' | 'resolved' | 'closed'
@@ -228,6 +233,8 @@ export type Database = {
           state: BusinessStateEnum
           public_area_label: string | null
           public_trust_badge: string | null
+          public_listing_consent_id: string | null
+          searchable: boolean
           published_at: string | null
         } & Timestamps
         Insert: {
@@ -241,6 +248,8 @@ export type Database = {
           state?: BusinessStateEnum
           public_area_label?: string | null
           public_trust_badge?: string | null
+          public_listing_consent_id?: string | null
+          searchable?: boolean
           published_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['businesses']['Insert']>
@@ -641,6 +650,45 @@ export type Database = {
           revoked_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['referral_codes']['Insert']>
+        Relationships: []
+      }
+      consent_records: {
+        Row: {
+          id: string
+          kind: ConsentKindEnum
+          signer_user_id: string
+          subject_user_id: string | null
+          subscription_id: string | null
+          document_version: string
+          document_hash: string
+          document_text: string
+          acknowledged_items: string[]
+          typed_name: string
+          verification_method: string
+          ip_hash: string | null
+          user_agent: string | null
+          signed_at: string
+          revokes_id: string | null
+          revocation_reason: string | null
+        }
+        Insert: {
+          id?: string
+          kind: ConsentKindEnum
+          signer_user_id: string
+          subject_user_id?: string | null
+          subscription_id?: string | null
+          document_version: string
+          document_hash: string
+          document_text: string
+          acknowledged_items: string[]
+          typed_name: string
+          verification_method: string
+          ip_hash?: string | null
+          user_agent?: string | null
+          revokes_id?: string | null
+          revocation_reason?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['consent_records']['Insert']>
         Relationships: []
       }
       referrals: {

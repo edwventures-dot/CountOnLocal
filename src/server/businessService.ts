@@ -17,6 +17,7 @@ import { canOfferService, flagProhibitedWording, type CatalogService } from '@/d
 import { checkSlug, uniqueSlug } from '@/domain/slug'
 import { publishBlockers, type ServiceReadiness, type PublishBlocker } from '@/domain/publish'
 import { isPayoutReady } from '@/domain/payout'
+import { checkPriceCap } from '@/domain/money'
 import type { GuardianState } from '@/domain/guardian'
 import { NO_ACCOUNT, type StripeAccountState } from '@/domain/payout'
 import { writeAudit } from '@/server/audit'
@@ -201,8 +202,10 @@ export type AddServiceResult =
         | 'GUARDIAN_APPROVAL_REQUIRED'
         | 'CATEGORY_NOT_APPROVED_BY_GUARDIAN'
         | 'PROHIBITED_WORDING'
+        | 'PRICE_TOO_HIGH'
         | 'WRITE_FAILED'
       flags?: readonly { reason: string; match: string }[]
+      message?: string
     }
 
 /**
@@ -222,6 +225,15 @@ export async function addService(args: {
   ip?: string | null
 }): Promise<AddServiceResult> {
   const { db, providerUserId, businessId, input, now } = args
+
+  // $50 per cycle, from the legal pass. Checked first, so an over-priced
+  // service never reaches the point of existing as a draft.
+  const cap = checkPriceCap({
+    priceCents: input.priceCents,
+    priceUnit: input.priceUnit,
+    billingCycleWeeks: input.billingCycleWeeks,
+  })
+  if (!cap.ok) return { ok: false, code: 'PRICE_TOO_HIGH', message: cap.message }
 
   const ctx = await loadProvider(db, providerUserId, now)
   if (!ctx) return { ok: false, code: 'NO_PROVIDER_PROFILE' }
@@ -439,10 +451,25 @@ export async function publishBusiness(args: {
         ? 'identity_verified'
         : null
 
+  // Searchable only if this provider is an adult, or a guardian has signed
+  // the Public Listing Consent. The direct link and QR work either way --
+  // that distinction is the whole of the default-private model.
+  //
+  // Read here, where provider age is available, and published as a plain
+  // boolean because the storefront runs on the anon client and must never
+  // be able to ask whether a provider is a minor.
+  const isMinor = ctxForBadge?.band === 'minor'
+  const { data: listingRow } = await db
+    .from('businesses')
+    .select('public_listing_consent_id')
+    .eq('id', businessId)
+    .maybeSingle()
+  const searchable = !isMinor || Boolean(listingRow?.public_listing_consent_id)
+
   const publishedAt = now.toISOString()
   const { error } = await db
     .from('businesses')
-    .update({ state: 'published', published_at: publishedAt, public_trust_badge: badge })
+    .update({ state: 'published', published_at: publishedAt, public_trust_badge: badge, searchable })
     .eq('id', businessId)
 
   if (error) {

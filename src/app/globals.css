@@ -409,3 +409,37 @@ input[type='range'].field__input {
 .sev--s1 { color: #8a4a12; background: #fdf3e6; border-color: var(--col-amber); }
 .sev--s2 { color: #1f4b7a; background: #eef4fb; border-color: var(--col-blue); }
 .sev--s3 { color: var(--col-muted); background: var(--col-cream); border-color: var(--col-border); }
+
+/* --- itemized consent ---------------------------------------------------- */
+
+.attest {
+  border: 1px solid var(--col-border);
+  border-radius: var(--col-radius-control);
+  padding: var(--space-4);
+  margin: 0;
+  background: var(--col-white);
+}
+
+.attest__item {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--col-border);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.attest__item:last-child {
+  border-bottom: none;
+}
+
+/* Comfortably past the 44px touch target the UX spec asks for, because
+   these are the points somebody is agreeing to, not decoration. */
+.attest__item input[type='checkbox'] {
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+  flex: none;
+  accent-color: var(--col-ink);
+}

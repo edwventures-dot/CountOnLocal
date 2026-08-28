@@ -242,7 +242,7 @@ describe('creating a subscription', () => {
       input: {
         providerServiceId: serviceId,
         address: OUTSIDE,
-        adultAttestation: true,
+        attestation: { acknowledgedItems: ['is_adult','no_background_checks','provider_may_be_minor','accurate_address_and_dog','messaging','not_emergency_service'], typedName: 'Test Customer' },
       },
       now: NOW,
     })
@@ -256,7 +256,7 @@ describe('creating a subscription', () => {
       input: {
         providerServiceId: serviceId,
         address: INSIDE,
-        adultAttestation: true,
+        attestation: { acknowledgedItems: ['is_adult','no_background_checks','provider_may_be_minor','accurate_address_and_dog','messaging','not_emergency_service'], typedName: 'Test Customer' },
         customerInstructions: 'Bins live on the left side of the garage.',
       },
       now: NOW,
@@ -317,7 +317,7 @@ describe('creating a subscription', () => {
     const r = await createSubscription({
       db: admin,
       customerUserId: customerId,
-      input: { providerServiceId: serviceId, address: INSIDE, adultAttestation: true },
+      input: { providerServiceId: serviceId, address: INSIDE, attestation: { acknowledgedItems: ['is_adult','no_background_checks','provider_may_be_minor','accurate_address_and_dog','messaging','not_emergency_service'], typedName: 'Test Customer' } },
       now: NOW,
     })
     expect(r).toEqual({ ok: false, code: 'ALREADY_SUBSCRIBED' })
@@ -344,7 +344,7 @@ describe('creating a subscription', () => {
       input: {
         providerServiceId: serviceId,
         address: INSIDE,
-        adultAttestation: true,
+        attestation: { acknowledgedItems: ['is_adult','no_background_checks','provider_may_be_minor','accurate_address_and_dog','messaging','not_emergency_service'], typedName: 'Test Customer' },
         startDate: '2026-09-01',
       },
       now: NOW,
@@ -359,7 +359,7 @@ describe('creating a subscription', () => {
       input: {
         providerServiceId: serviceId,
         address: INSIDE,
-        adultAttestation: true,
+        attestation: { acknowledgedItems: ['is_adult','no_background_checks','provider_may_be_minor','accurate_address_and_dog','messaging','not_emergency_service'], typedName: 'Test Customer' },
         startDate: '2026-09-09', // a Wednesday
       },
       now: NOW,
@@ -381,7 +381,7 @@ describe('capacity', () => {
     const second = await createSubscription({
       db: admin,
       customerUserId: secondCustomerId,
-      input: { providerServiceId: serviceId, address: INSIDE, adultAttestation: true },
+      input: { providerServiceId: serviceId, address: INSIDE, attestation: { acknowledgedItems: ['is_adult','no_background_checks','provider_may_be_minor','accurate_address_and_dog','messaging','not_emergency_service'], typedName: 'Test Customer' } },
       now: NOW,
     })
     expect(second.ok).toBe(true)
@@ -398,7 +398,7 @@ describe('capacity', () => {
     const third = await createSubscription({
       db: admin,
       customerUserId: providerId, // any third party
-      input: { providerServiceId: serviceId, address: INSIDE, adultAttestation: true },
+      input: { providerServiceId: serviceId, address: INSIDE, attestation: { acknowledgedItems: ['is_adult','no_background_checks','provider_may_be_minor','accurate_address_and_dog','messaging','not_emergency_service'], typedName: 'Test Customer' } },
       now: NOW,
     })
     expect(third).toEqual({ ok: false, code: 'AT_CAPACITY' })

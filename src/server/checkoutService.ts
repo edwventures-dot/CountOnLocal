@@ -26,6 +26,7 @@ import { checkAddressEligibility, type AddressFields } from '@/server/eligibilit
 import { todayUtc } from '@/server/providerOnboarding'
 import { writeAudit } from '@/server/audit'
 import { attachReferral } from '@/server/referralService'
+import { recordConsent } from '@/server/consentService'
 import { DEFAULT_REFERRAL_TERMS } from '@/domain/referral'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
@@ -226,8 +227,21 @@ export const createSubscriptionSchema = previewSchema.extend({
    */
   referralCode: z.string().trim().min(1).max(16).optional(),
   customerInstructions: z.string().trim().max(500).optional(),
-  /** PRD section 6: customers attest to being 18+ in V1. */
-  adultAttestation: z.literal(true),
+  /**
+   * The itemized customer attestation, from the legal pass.
+   *
+   * A list of acknowledged item keys plus a typed name, replacing the
+   * single `attestation: { acknowledgedItems: ['is_adult','no_background_checks','provider_may_be_minor','accurate_address_and_dog','messaging','not_emergency_service'], typedName: 'Test Customer' }` boolean. The boolean could record that
+   * somebody clicked; it could not record WHAT they were told, which is
+   * the entire point of an attestation that says Count On Local runs no
+   * background checks.
+   *
+   * Validated against domain/consent.ts and stored as a signed record.
+   */
+  attestation: z.object({
+    acknowledgedItems: z.array(z.string().max(64)).min(1).max(32),
+    typedName: z.string().trim().min(3).max(120),
+  }),
 })
 export type CreateSubscriptionInput = z.infer<typeof createSubscriptionSchema>
 
@@ -264,7 +278,9 @@ export type CreateSubscriptionResult =
         | 'ADDRESS_AMBIGUOUS'
         | 'GEOCODER_UNAVAILABLE'
         | 'UNSUPPORTED_COUNTRY'
+        | 'ATTESTATION_INVALID'
         | 'WRITE_FAILED'
+      message?: string
     }
 
 /**
@@ -446,6 +462,28 @@ export async function createSubscription(args: {
     },
     ip: args.ip ?? null,
   })
+
+  // The attestation, recorded against the subscription it was given for.
+  //
+  // After the subscription exists so the record can point at it, and
+  // before the referral so a failure here stops the checkout -- an
+  // attestation is not optional garnish, it is the thing the customer was
+  // told about background checks. A subscription without one is a
+  // subscription nobody can prove was informed.
+  const attested = await recordConsent({
+    db,
+    kind: 'customer_attestation',
+    signerUserId: customerUserId,
+    subscriptionId: subscription.id,
+    acknowledgedItems: input.attestation.acknowledgedItems,
+    typedName: input.attestation.typedName,
+    ipHash: null,
+  })
+
+  if (!attested.ok) {
+    console.error('[checkout] attestation refused', attested.code)
+    return { ok: false, code: 'ATTESTATION_INVALID', message: attested.message }
+  }
 
   // After the subscription exists, because a referral points at one. A
   // failure here does not undo the subscription: the customer has bought

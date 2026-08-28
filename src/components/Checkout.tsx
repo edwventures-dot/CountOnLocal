@@ -28,6 +28,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Alert, Field } from '@/components/ui'
+import { CUSTOMER_ATTESTATION } from '@/domain/consent'
 
 type Preview = {
   business: { name: string; slug: string }
@@ -92,6 +93,11 @@ export function Checkout({ serviceId }: { serviceId: string }) {
   const [postalCode, setPostalCode] = useState('')
   const [instructions, setInstructions] = useState('')
   const [referralCode, setReferralCode] = useState('')
+  const [acknowledged, setAcknowledged] = useState<string[]>([])
+  const [typedName, setTypedName] = useState('')
+
+  const allAcknowledged = CUSTOMER_ATTESTATION.items.every((i) => acknowledged.includes(i.key))
+  const signatureLooksReal = typedName.trim().length >= 3
 
   const address = { line1, city, region, postalCode, countryCode: 'US' }
 
@@ -136,7 +142,7 @@ export function Checkout({ serviceId }: { serviceId: string }) {
       const created = await post('/api/v1/subscriptions', {
         providerServiceId: serviceId,
         address,
-        adultAttestation: true,
+        attestation: { acknowledgedItems: acknowledged, typedName },
         ...(instructions.trim() ? { customerInstructions: instructions.trim() } : {}),
         ...(referralCode.trim() ? { referralCode: referralCode.trim() } : {}),
       })
@@ -291,12 +297,54 @@ export function Checkout({ serviceId }: { serviceId: string }) {
           onChange={(e) => setReferralCode(e.target.value)}
         />
 
+        {/*
+          Itemized, from the legal pass. Each point is checked separately
+          and the keys are stored, so "did they agree that we run no
+          background checks" is answerable on its own rather than inferred
+          from one boolean. The list renders from domain/consent.ts -- the
+          same array that gets hashed into the signed record, so what is on
+          screen and what is stored cannot drift.
+        */}
+        <fieldset className="attest">
+          <legend className="field__label">{CUSTOMER_ATTESTATION.title}</legend>
+          <p className="field__hint">{CUSTOMER_ATTESTATION.intro}</p>
+          {CUSTOMER_ATTESTATION.items.map((item) => (
+            <label key={item.key} className="attest__item">
+              <input
+                type="checkbox"
+                checked={acknowledged.includes(item.key)}
+                onChange={(e) =>
+                  setAcknowledged((prev) =>
+                    e.target.checked
+                      ? [...prev, item.key]
+                      : prev.filter((k) => k !== item.key),
+                  )
+                }
+              />
+              <span>{item.text}</span>
+            </label>
+          ))}
+        </fieldset>
+
+        <Field
+          label="Type your full name to agree"
+          name="typedName"
+          hint={CUSTOMER_ATTESTATION.statement}
+          autoComplete="name"
+          value={typedName}
+          onChange={(e) => setTypedName(e.target.value)}
+        />
+
         <p className="small muted" style={{ marginBottom: 0 }}>
-          By continuing you confirm you are 18 or over. Nothing is charged until you enter a card
-          on the next step.
+          Nothing is charged until you enter a card on the next step.
         </p>
 
-        <button className="btn btn--full" type="button" onClick={confirm} disabled={busy}>
+        <button
+          className="btn btn--full"
+          type="button"
+          onClick={confirm}
+          disabled={busy || !allAcknowledged || !signatureLooksReal}
+        >
           {busy ? 'Setting up...' : 'Continue to payment'}
         </button>
         <button

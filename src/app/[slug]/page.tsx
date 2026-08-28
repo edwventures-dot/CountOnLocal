@@ -35,7 +35,7 @@ async function loadStorefront(slug: string) {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, slug, tagline, about, public_area_label, published_at, public_trust_badge')
+    .select('id, name, slug, tagline, about, public_area_label, published_at, public_trust_badge, searchable')
     .eq('slug', slug)
     .maybeSingle()
 
@@ -103,6 +103,23 @@ export async function generateMetadata({ params }: Params) {
   return {
     title: `${data.business.name} · Count On Local`,
     description: data.business.tagline ?? 'A neighbourhood service business on Count On Local.',
+    /*
+      Default private, from the legal pass. The page still WORKS for anyone
+      holding the link or scanning the flyer -- that is the intended primary
+      flow and is unchanged. What this withholds is being found by someone
+      who was not given the link.
+
+      `searchable` is false for a minor until a guardian signs the Public
+      Listing Consent, and is decided at publish where provider age is
+      readable. SAFETY_TRUST_POLICY section 18 asks for indexable only after
+      opt-in; this is that, and it fails closed.
+
+      nocache and nosnippet as well as noindex: a crawler that ignores
+      noindex should still not be keeping a copy of a teenager's page.
+    */
+    robots: data.business.searchable
+      ? { index: true, follow: true }
+      : { index: false, follow: false, nocache: true, nosnippet: true },
   }
 }
 

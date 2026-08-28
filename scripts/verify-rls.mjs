@@ -36,6 +36,8 @@ const TABLES = [
   'referrals',
   'referral_codes',
   'ledger_entries',
+  // Signed consents name a minor and carry a guardian's legal signature.
+  'consent_records',
 ]
 
 let passed = 0

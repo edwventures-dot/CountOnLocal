@@ -38,6 +38,9 @@ export async function POST(
   })
 
   if (!result.ok) {
+      if (result.code === 'PRICE_TOO_HIGH') {
+        return apiError(result.code, result.message ?? 'That price is too high.', 422, { requestId })
+      }
     switch (result.code) {
       case 'BUSINESS_NOT_FOUND':
         return apiError('NOT_FOUND', 'That business was not found.', 404, { requestId })

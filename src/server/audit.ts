@@ -71,6 +71,10 @@ export type AuditAction =
   | 'referral.attached'
   | 'referral.bonus_paid'
   | 'referral.voided'
+  | 'consent.signed'
+  | 'consent.revoked'
+  | 'listing.made_public'
+  | 'listing.made_private'
 
 /** Fields that must never appear in an audit snapshot. */
 const REDACTED_KEYS = new Set([

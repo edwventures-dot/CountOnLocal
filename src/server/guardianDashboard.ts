@@ -70,6 +70,8 @@ export type GuardianDashboard = {
     /** The page a neighbour would land on. */
     publicUrl: string
     isLive: boolean
+    /** Findable in search, as opposed to reachable by link. */
+    searchable: boolean
   } | null
   services: GuardianServiceView[]
   /** Upcoming scheduled work. Empty until verified. */
@@ -144,7 +146,7 @@ export async function getGuardianDashboard(args: {
 
   const { data: biz } = await db
     .from('businesses')
-    .select('id, name, slug, state')
+    .select('id, name, slug, state, searchable')
     .eq('provider_user_id', rel.provider_user_id)
     .maybeSingle()
 
@@ -273,6 +275,7 @@ export async function getGuardianDashboard(args: {
             state: biz.state,
             publicUrl: `https://countonlocal.com/${biz.slug}`,
             isLive: biz.state === 'published',
+            searchable: biz.searchable,
           }
         : null,
       services,
