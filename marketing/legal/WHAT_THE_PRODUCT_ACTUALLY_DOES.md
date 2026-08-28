@@ -230,31 +230,148 @@ them:
 
 ---
 
-## 3. Still unanswered, and I cannot invent them
+## 3. Retention and deletion — BUILT 2026-08-28, numbers need sign-off
 
-These need the owner or counsel. They are not written down anywhere and I
-have deliberately not guessed:
+These were the three items I said I could not invent. The **mechanism** is
+now built and tested; the **periods** are proposals that need counsel's
+agreement or correction. Both parts are in one file,
+`src/domain/retention.ts`, with a written reason against every number so
+they can be overruled individually rather than as a block.
 
-- **Retention periods.** How long do we keep messages, photos (when they
-  exist), addresses, audit rows, consent records?
-- **Deletion rights.** What can somebody ask to have deleted, and what
-  must be kept regardless — the consent records are append-only by
-  design, which interacts with this directly.
-- **A minor's data on account closure.** Including what happens to their
-  consent record and their earnings history.
+Changing a period is a one-line edit in that file. Nothing else in the
+codebase decides how long anything is kept.
+
+### 3.1 The proposed periods
+
+| What | Kept for | Clock starts | Then |
+|---|---|---|---|
+| Ordinary messages | 1 year | message sent | body replaced |
+| Reported/blocked messages | 3 years | message sent | body replaced |
+| Completion photos | 180 days | the visit | file and row deleted |
+| Customer addresses | 180 days | last subscription there ending | emptied |
+| Notification records | 90 days | queued | deleted |
+| Ledger entries | 7 years | entry written | — see 3.3 |
+| Audit log | 7 years | the action | — see 3.3 |
+| Consent records | 7 years | **relationship ending**, not signing | signature redacted |
+| Incidents | 7 years | resolution | — see 3.3 |
+| Strikes / suspensions / bans | 7 years | the action | — see 3.3 |
+
+Three of these have reasoning counsel may want to push on:
+
+- **180 days for photos and addresses** is set by the **card chargeback
+  window** (~120 days). Evidence for a disputed visit has to outlive the
+  window in which the dispute can arrive, or we defend a chargeback with
+  nothing in hand. Shorter than ~130 days breaks that.
+- **7 years** is the ordinary US business-records expectation. It is the
+  single number in this file most likely to be wrong, particularly for
+  money held on behalf of minors.
+- **The consent clock starts when the guardian relationship ends**, not
+  when the document was signed. A consent signed when a provider was 13
+  and revoked at 17 is retained from 17. This is deliberate and doubles
+  the effective retention in the common case.
+
+Nothing is retained indefinitely. That is asserted by a test, not assumed.
+
+### 3.2 What "delete my account" actually does
+
+**It does not delete the account row, and it never could have.** Three
+tables reference `users` with `on delete restrict` — consent records,
+completion photos, incident reports. A hard delete of anybody who has
+signed a consent, uploaded a photo or been named in a report fails on a
+foreign key. That predates this work; it is the correct behaviour, so it
+is now written down and built on.
+
+Closing an account instead:
+
+- replaces the email with a unique address at `.invalid`, a TLD reserved
+  so it can never be registered or delivered to, and clears the phone.
+  (Both columns are unique and one is required, so neither can be blanked.)
+- replaces the provider display name.
+- empties every address on the account, **including the geocoded
+  coordinates** — which are a more precise address than the text, and are
+  the field an ordinary update silently misses.
+- deletes notification records and completion photos.
+- redacts messages the person sent — **except reported or blocked ones**.
+  Otherwise the way to erase a report about your conduct is to close your
+  account.
+
+**Two refusals**, both protecting the person asking:
+
+- **Money still owed** — closure is refused until it has been paid out.
+  It is their own money, and for a 13–17 provider it is a minor's money
+  sitting in a guardian's account.
+- **A live subscription** — cancel first, so nobody is charged for work
+  nobody is scheduled to do.
+
+Counsel should know these exist, in case a deletion right somewhere
+requires closure regardless. The answer would be to pay out and cancel
+first, not to remove the checks.
+
+`GET /api/v1/account/close` returns exactly what closure will do, read
+from the same table the job acts on — so the confirmation screen and the
+code cannot drift apart. **The product must never tell somebody their data
+is gone while retaining seven years of it**, and this is the mechanism
+that prevents it.
+
+### 3.3 De-identification, honestly
+
+For the ledger, the audit log, incidents and account actions there is **no
+separate erasure sweep, and there could not be** — nothing in those rows
+names anybody. They carry a user id and a fact. They stop being personal
+data the moment the account row those ids point at stops naming a person,
+which happens at closure.
+
+This is worth stating precisely because it is easy to write a policy
+promising a sweep that no code performs. Every class is marked in the
+policy as either genuinely swept or covered by the account row, and a test
+fails if a class is listed as swept and nothing touches it.
+
+### 3.4 A minor's data on closure
+
+Same as anyone's, with two specifics:
+
+- **Earnings history stays**, de-identified. It is a financial record and
+  the money genuinely moved. Closure is refused while any of it is unpaid.
+- **The consent record stays**, and this is the one real conflict in the
+  whole design. It is append-only — a database trigger refuses UPDATE and
+  DELETE from every role including the application's — so a guardian
+  cannot make their consent disappear, which is the entire point of it.
+
+  A retention period that never expires would contradict TECHNICAL_SPEC
+  §23 outright, so the trigger now permits **exactly one** change: the
+  typed signature, user agent and hashed IP may be replaced with a
+  redaction placeholder, and only once the relationship has ended *and*
+  seven years have passed. Every other UPDATE and every DELETE is still
+  refused. Verified against the live database, including that a signature
+  cannot be replaced by a *different* name, and that a still-active
+  guardianship blocks redaction however old the signature is.
+
+  **The loss is real and counsel should weigh it:** after redaction the
+  record no longer carries the signature. It shows that an identified
+  account accepted a specific document, itemized, on a specific date — but
+  not the name that account typed. Seven years is a proposal.
+
+### 3.5 What is still an open question
+
+- Whether seven years is right, especially for money held for minors.
+- Whether any applicable deletion right overrides the two refusals in 3.2.
+- Whether a minor reaching 18 should be able to request erasure of records
+  created while they were 13–17 on different terms from an adult's. The
+  aging-out path exists; no special deletion right is built for it.
 
 ---
 
 ## 4. One thing worth knowing about how this was built
 
-Five times now, a capability has been declared in the design and never
+Six times now, a capability has been declared in the design and never
 wired up, with nothing failing in the meantime because absence is silent:
 a service state that nothing could reach, a role nothing granted, a
 guardian verification event nothing fired, an audit field recording the
-wrong role, and an account status column nothing read — which meant a
-suspended account could do everything an active one could.
+wrong role, an account status column nothing read — which meant a
+suspended account could do everything an active one could — and a
+`closed` account status that no code path could ever set.
 
-All five are fixed. The reason to mention it here is that **a capability
+All six are fixed. The reason to mention it here is that **a capability
 appearing in a design document is not evidence it works.** If counsel or
 marketing needs to rely on a specific behaviour, ask and I will exercise
 it against the real system rather than reading the code and assuming.

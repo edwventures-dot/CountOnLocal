@@ -79,6 +79,8 @@ export type AuditAction =
   | 'account.reinstated'
   | 'photo.viewed_by_staff'
   | 'payout.sent'
+  | 'account.closed'
+  | 'account.de_identified'
 
 /** Fields that must never appear in an audit snapshot. */
 const REDACTED_KEYS = new Set([

@@ -115,6 +115,12 @@ export type Database = {
           stripe_payouts_active: boolean
           stripe_requirements_due: string[]
           stripe_synced_at: string | null
+          // Added in migration 0035. Closure is the request,
+          // de-identification is the work, and they are separate columns so
+          // a half-finished closure is visible to the next sweep.
+          closed_at: string | null
+          deletion_requested_at: string | null
+          de_identified_at: string | null
         } & Timestamps
         Insert: {
           id?: string
@@ -129,6 +135,9 @@ export type Database = {
           stripe_payouts_active?: boolean
           stripe_requirements_due?: string[]
           stripe_synced_at?: string | null
+          closed_at?: string | null
+          deletion_requested_at?: string | null
+          de_identified_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['users']['Insert']>
         Relationships: []
@@ -344,6 +353,14 @@ export type Database = {
           geocoded_at: string | null
           geocoder: string | null
           access_notes: string | null
+          /**
+           * geography(Point, 4326). Readable over PostgREST as hex WKB,
+           * but NOT writable through it -- setting it needs
+           * set_customer_address_point (0018) and clearing it needs
+           * redact_customer_addresses (0037). Absent from Insert for
+           * exactly that reason.
+           */
+          point: string | null
         } & Timestamps
         Insert: {
           id?: string
@@ -358,6 +375,8 @@ export type Database = {
           geocoded_at?: string | null
           geocoder?: string | null
           access_notes?: string | null
+          /** Accepted by Postgres; needed to backdate rows in retention tests. */
+          created_at?: string
         }
         Update: Partial<Database['public']['Tables']['customer_addresses']['Insert']>
         Relationships: []
@@ -867,6 +886,8 @@ export type Database = {
           last_error?: string | null
           next_attempt_at?: string
           sent_at?: string | null
+          /** Accepted by Postgres; needed to backdate rows in retention tests. */
+          created_at?: string
         }
         Update: Partial<Database['public']['Tables']['notifications']['Insert']>
         Relationships: []
@@ -888,7 +909,24 @@ export type Database = {
         Relationships: []
       }
     }
-    Views: Record<never, never>
+    Views: {
+      /**
+       * Migration 0035. When an address stopped being needed --
+       * NULL while any live subscription still uses it.
+       *
+       * A view rather than a stored column so no write path that changes a
+       * subscription's state can forget to maintain it. Forgetting once
+       * would keep a home address indefinitely, silently.
+       */
+      address_retention_clock: {
+        Row: {
+          address_id: string
+          customer_user_id: string
+          clock_starts_at: string | null
+        }
+        Relationships: []
+      }
+    }
     Functions: Record<never, never>
     Enums: { user_role: UserRole; guardian_state: GuardianStateEnum }
     CompositeTypes: Record<never, never>

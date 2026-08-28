@@ -65,7 +65,7 @@ import { runAgeOut } from '@/server/agingJob'
 import { runPayouts } from '@/server/payoutService'
 import { dispatchNotifications, setNotifier } from '@/server/notifications'
 import { ResendNotifier, resendConfigFromEnv } from '@/server/resendNotifier'
-import { purgeExpiredMessages } from '@/server/messageService'
+import { runRetention } from '@/server/retentionJob'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
 
@@ -81,7 +81,7 @@ type JobName =
   | 'age-out'
   | 'referral-rewards'
   | 'notify'
-  | 'purge-messages'
+  | 'retention'
 
 const JOBS: readonly JobName[] = [
   'extend-horizon',
@@ -91,7 +91,7 @@ const JOBS: readonly JobName[] = [
   'age-out',
   'referral-rewards',
   'notify',
-  'purge-messages',
+  'retention',
 ]
 
 function authorized(request: Request): boolean {
@@ -179,10 +179,17 @@ export async function GET(request: Request): Promise<Response> {
   if (emailConfig) setNotifier(new ResendNotifier(emailConfig))
 
   await run('notify', () => dispatchNotifications({ db, now }))
-  // PRD 17 requires the retention policy be implemented, not merely
-  // documented. Bodies past their date are redacted; the row stays, so the
-  // fact a conversation happened survives even though the words do not.
-  await run('purge-messages', () => purgeExpiredMessages({ db, now }))
+  // Last of the work jobs. PRD 17 and TECHNICAL_SPEC 23 require the
+  // retention policy to be implemented, not merely documented: every class
+  // past its date is expired, and any account closed since the last run is
+  // de-identified. The periods themselves live in src/domain/retention.ts,
+  // one table with a written reason against each, so they can be reviewed
+  // by somebody who does not read TypeScript.
+  //
+  // After notify on purpose. Notifications are one of the classes it
+  // expires, so running it first would delete rows this pass was about to
+  // send.
+  await run('retention', () => runRetention({ db, now }))
 
   const finishedAt = new Date().toISOString()
 
