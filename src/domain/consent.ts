@@ -56,7 +56,7 @@ export type ConsentDocument = {
  */
 export const GUARDIAN_CONSENT: ConsentDocument = {
   kind: 'guardian_consent',
-  version: '2026-08-28.1',
+  version: '2026-08-28.2',
   title: 'Guardian consent',
   intro:
     "You're being asked to let {{minor_name}} run a small local service business through Count On Local. Please read each point and check the box to confirm you understand it.",
@@ -95,7 +95,7 @@ export const GUARDIAN_CONSENT: ConsentDocument = {
     },
     {
       key: 'photos_and_reviews',
-      text: 'My teen will upload completion photos, and customers can leave public reviews. Photos have location data removed and are private by default; reviews build a public reputation.',
+      text: 'My teen can add a photo when they finish a job, and customers can leave public reviews. Location data is removed from photos before they are stored, and only my teen, the customer and I can see them; reviews build a public reputation.',
     },
     {
       key: 'revocable',
@@ -140,7 +140,7 @@ export const PUBLIC_LISTING_CONSENT: ConsentDocument = {
 
 export const CUSTOMER_ATTESTATION: ConsentDocument = {
   kind: 'customer_attestation',
-  version: '2026-08-28.1',
+  version: '2026-08-28.2',
   title: 'Before you subscribe',
   intro: 'Please read each point and check the box to confirm you understand it.',
   items: [
@@ -155,7 +155,7 @@ export const CUSTOMER_ATTESTATION: ConsentDocument = {
     },
     {
       key: 'accurate_address_and_dog',
-      text: 'I will give an accurate service address, and for dog walking, honest information about my dog (size, leash/harness, and any bite history).',
+      text: 'I will give an accurate service address, and for dog walking, honest information about my dog — size, what they are walked on, and whether they have ever bitten anyone. My walker sees this before they arrive.',
     },
     {
       key: 'messaging',

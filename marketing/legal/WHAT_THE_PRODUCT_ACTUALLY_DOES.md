@@ -14,42 +14,45 @@ money is involved, against real Stripe test mode.
 
 ---
 
-## 1. Four things the drafts assume that are not true
+## 1. Things the drafts assumed that were not true
 
-These need a copy change, a build decision, or both. They are listed
-first because they are the only items here that are actively wrong.
+Two of the four are now built and the consent wording has been corrected
+to match. Two remain, and they are the only items in this file that are
+actively wrong today.
 
-### 1.1 Completion photos do not exist
+### 1.1 Completion photos — BUILT 2026-08-28
 
-The guardian consent currently asks a parent to acknowledge:
+Was: promised in the signed consent, did not exist. Now built, minimum
+version: one photo per completed visit, optional.
 
-> "My teen will upload completion photos... Photos have location data
-> removed and are private by default."
+- EXIF and all other metadata stripped **before storage**, not before
+  display — otherwise the original sits in a bucket and every backup with
+  the coordinates in it. Verified by uploading a JPEG with GPS
+  coordinates and confirming they are absent from the stored bytes.
+- Private bucket, **no signed URLs**. Every fetch is authorized: the
+  provider, the customer, a cleared guardian, and staff handling an
+  incident. Anyone else gets 404, because "you may not see this" confirms
+  something is there.
+- Staff viewing somebody's photo writes an audit row. The parties to the
+  job do not.
+- Optional on purpose. A required photo means a provider with a flat
+  battery cannot mark work they actually did, which ends with a customer
+  not charged and a teenager not paid.
 
-**There is no photo upload.** No storage, no EXIF stripping, no
-per-service photo requirement. It is specified in the design (PRD §17
-lists a photo per service type; Safety §13 covers EXIF and privacy
-defaults) and was never built.
+Consent wording updated to match, and the document version moved with it.
 
-A guardian signing today agrees to something that cannot happen. Either
-build it or remove the sentence — the current state is the one option
-that is not acceptable.
+### 1.2 Dog information — BUILT 2026-08-28
 
-### 1.2 Dog information is not collected
+Was: asked for in a signed attestation, with no field behind it. Now
+collected at checkout for dog services and shown to the provider **above
+the address, as a warning**, not folded into the instructions text.
 
-The customer attestation asks:
+Bite history has three values and `unsure` is one of them. A rescue dog's
+history is often genuinely unknown, and forcing that into "no" turns an
+honest gap into a false reassurance. The provider is told the history is
+not known, and told they may refuse the stop.
 
-> "for dog walking, honest information about my dog (size, leash/harness,
-> and any bite history)"
-
-**There is no field for any of that.** The design mentions a configurable
-dog count and nothing else; size, leash and bite history were introduced
-by the consent draft. A customer agreeing to give this information is
-agreeing to fill in a form that does not exist.
-
-This one matters beyond tidiness: bite history is a safety input for
-sending a fourteen-year-old to walk a strange dog. If we ask for it in a
-signed document, we should collect it and show it to the provider.
+Consent wording updated to match, and the version moved with it.
 
 ### 1.3 "Signer identity (verified)" overstates what we know
 
@@ -94,6 +97,21 @@ behaviour. Say so, or omit it.
   now closed.
 - Customers attest to being 18+. **That is an attestation, not a check.**
   We do not verify anybody's age.
+
+### Turning eighteen
+
+- Handled automatically. On the eighteenth birthday the guardian
+  requirement is cleared and the relationship ends.
+- **The payout account is detached**, because a minor's payouts go to a
+  Connect account in the guardian's name and a Connect account cannot be
+  moved between legal persons. Earnings keep accruing in the ledger and
+  nothing is lost; they stop paying out until the new adult connects their
+  own account.
+- Both the provider and the guardian are warned **thirty days ahead** and
+  again on the day. The guardian is told because their deposits stop, and
+  finding that out from a missing payment is a bad way to learn it.
+- Counsel should note this: the guardian consent says "I hold the money
+  until they turn 18", and that sentence is now literally true.
 
 ### Guardian consent (ESIGN / UETA)
 
@@ -208,9 +226,6 @@ have deliberately not guessed:
   design, which interacts with this directly.
 - **A minor's data on account closure.** Including what happens to their
   consent record and their earnings history.
-- **Consent on turning 18.** The guardian relationship is built around a
-  minor. Nothing currently happens on their eighteenth birthday, and
-  somebody should decide what should.
 
 ---
 

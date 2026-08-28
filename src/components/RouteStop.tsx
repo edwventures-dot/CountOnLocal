@@ -23,6 +23,73 @@ import { Alert } from '@/components/ui'
 
 type Outcome = { kind: 'idle' } | { kind: 'busy' } | { kind: 'done'; state: string } | { kind: 'error'; message: string }
 
+/**
+ * The photo, taken before the stop is marked done.
+ *
+ * `capture="environment"` asks a phone for the rear camera directly, so
+ * the common case is one tap rather than a trip through the gallery.
+ *
+ * Optional, deliberately. A required photo means a provider with a flat
+ * battery or no signal cannot mark work they actually did, and the
+ * consequence of that is a customer not being charged and a teenager not
+ * being paid. Evidence is worth a lot; it is not worth blocking the round.
+ */
+function PhotoUpload({ occurrenceId }: { occurrenceId: string }) {
+  const [state, setState] = useState<'idle' | 'sending' | 'done'>('idle')
+  const [error, setError] = useState<string | null>(null)
+
+  if (state === 'done') {
+    return (
+      <p className="small" style={{ color: 'var(--col-green)', margin: 0, fontWeight: 700 }}>
+        Photo added
+      </p>
+    )
+  }
+
+  return (
+    <div>
+      {error ? <Alert kind="error">{error}</Alert> : null}
+      <label className="field">
+        <span className="field__label">Photo (optional)</span>
+        <span className="field__hint">
+          Proof the job was done, if there is a dispute later. Location data is removed before it is
+          stored, and only you, the customer and their guardian can see it.
+        </span>
+        <input
+          className="field__input"
+          type="file"
+          accept="image/jpeg,image/png"
+          capture="environment"
+          disabled={state === 'sending'}
+          onChange={async (e) => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            setError(null)
+            setState('sending')
+            try {
+              const res = await fetch(`/api/v1/occurrences/${occurrenceId}/photo`, {
+                method: 'POST',
+                headers: { 'Content-Type': file.type || 'application/octet-stream' },
+                body: file,
+              })
+              if (!res.ok) {
+                const body = await res.json().catch(() => ({}))
+                setError(body?.error?.message ?? 'That photo would not upload.')
+                setState('idle')
+                return
+              }
+              setState('done')
+            } catch {
+              setError('No signal. You can still mark this done.')
+              setState('idle')
+            }
+          }}
+        />
+      </label>
+    </div>
+  )
+}
+
 export function RouteStopActions({ occurrenceId }: { occurrenceId: string }) {
   const router = useRouter()
   const [outcome, setOutcome] = useState<Outcome>({ kind: 'idle' })
@@ -97,6 +164,7 @@ export function RouteStopActions({ occurrenceId }: { occurrenceId: string }) {
         </>
       ) : (
         <>
+          <PhotoUpload occurrenceId={occurrenceId} />
           <button
             className="btn btn--full btn--tall"
             type="button"

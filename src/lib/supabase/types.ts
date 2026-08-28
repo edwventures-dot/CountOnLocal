@@ -679,6 +679,31 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['account_actions']['Insert']>
         Relationships: []
       }
+      completion_photos: {
+        Row: {
+          id: string
+          occurrence_id: string
+          subscription_id: string
+          uploaded_by_user_id: string
+          storage_path: string
+          content_type: string
+          byte_size: number
+          stripped_segments: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          occurrence_id: string
+          subscription_id: string
+          uploaded_by_user_id: string
+          storage_path: string
+          content_type: string
+          byte_size: number
+          stripped_segments?: number
+        }
+        Update: Partial<Database['public']['Tables']['completion_photos']['Insert']>
+        Relationships: []
+      }
       consent_records: {
         Row: {
           id: string
