@@ -21,6 +21,8 @@ export type AuthedRequest = {
   authUserId: string
   roles: Role[]
   db: SupabaseClient<Database>
+  /** active, suspended or closed. Checked by guard() on every action. */
+  status: string
 }
 
 export type AuthResult =
@@ -53,7 +55,7 @@ export async function authenticate(): Promise<AuthResult> {
 
   if (!user) return { ok: false, code: 'UNAUTHENTICATED' }
 
-  const { data: domainUser } = await db.from('users').select('id').maybeSingle()
+  const { data: domainUser } = await db.from('users').select('id, status').maybeSingle()
 
   // Migration 0003 provisions this row by trigger the moment an auth user is
   // created, so its absence means something is genuinely wrong rather than
@@ -64,7 +66,19 @@ export async function authenticate(): Promise<AuthResult> {
 
   const roles: Role[] = (roleRows ?? []).map((r) => r.role)
 
-  return { ok: true, auth: { userId: domainUser.id, authUserId: user.id, roles, db } }
+  return {
+    ok: true,
+    auth: {
+      userId: domainUser.id,
+      authUserId: user.id,
+      roles,
+      db,
+      // Read on every request rather than trusted from sign-in, so a
+      // suspension takes effect on the next action and not at the next
+      // login. guard() is what refuses; see the note there.
+      status: domainUser.status,
+    },
+  }
 }
 
 /** Client IP for audit hashing. Never stored raw. */

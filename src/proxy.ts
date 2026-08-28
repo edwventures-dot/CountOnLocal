@@ -30,6 +30,18 @@ import type { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { prelaunchAllows, prelaunchGateEnabled } from '@/lib/prelaunch'
 
+/**
+ * Requests a suspended account may still make.
+ *
+ * Reporting a safety concern, specifically. Somebody suspended last week
+ * who witnesses something dangerous today must still be able to say so --
+ * blocking that would make a moderation decision into a gag, and the
+ * report is about somebody else.
+ */
+const ALLOWED_WHILE_SUSPENDED = new Set(['/api/v1/incidents'])
+
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
 export async function proxy(request: NextRequest) {
   if (prelaunchGateEnabled(process.env) && !prelaunchAllows(request.nextUrl.pathname)) {
     // 404, not 403 -- see the note in prelaunch.ts. Rewriting rather than
@@ -37,7 +49,70 @@ export async function proxy(request: NextRequest) {
     return new NextResponse(null, { status: 404 })
   }
 
-  return refreshSession(request)
+  const response = await refreshSession(request)
+
+  const blocked = await refusedForSuspension(request)
+  return blocked ?? response
+}
+
+/**
+ * Stops a suspended or closed account taking any action.
+ *
+ * ## Why here and not in each route
+ *
+ * users.status existed from migration 0001 and nothing read it. Adding the
+ * check to guard() covered six routes; twenty-five more authenticate
+ * directly, and the twenty-sixth would have forgotten. A suspension that
+ * depends on every future route remembering is not a suspension.
+ *
+ * Mutating methods only. A suspended person can still read their own pages
+ * -- they need to, to find out what happened -- and a GET cannot take work,
+ * charge anybody, or send a message.
+ *
+ * Costs one indexed lookup on requests that change something. Reads, which
+ * are almost all of them, are untouched.
+ */
+async function refusedForSuspension(request: NextRequest): Promise<NextResponse | null> {
+  if (!MUTATING.has(request.method)) return null
+  if (!request.nextUrl.pathname.startsWith('/api/')) return null
+  if (ALLOWED_WHILE_SUSPENDED.has(request.nextUrl.pathname)) return null
+
+  const url = process.env['NEXT_PUBLIC_SUPABASE_URL']
+  const anonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY']
+  if (!url || !anonKey) return null
+
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll()
+      },
+      setAll() {
+        // Read-only pass. The refresh above already wrote any new cookies.
+      },
+    },
+  })
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return null
+
+  // Row level security scopes this to the caller's own row.
+  const { data: row } = await supabase.from('users').select('status').maybeSingle()
+  if (!row || row.status === 'active') return null
+
+  return NextResponse.json(
+    {
+      error: {
+        code: 'ACCOUNT_NOT_ACTIVE',
+        message:
+          row.status === 'closed'
+            ? 'This account has been closed. Contact support if you think that is wrong.'
+            : 'This account is suspended while we look into a report.',
+      },
+    },
+    { status: 403 },
+  )
 }
 
 async function refreshSession(request: NextRequest): Promise<NextResponse> {

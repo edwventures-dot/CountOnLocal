@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { authenticate } from '@/server/auth'
 import { hasPermission } from '@/domain/roles'
-import { PayoutHold, ResolveIncident } from '@/components/AdminControls'
+import { AccountAction, IssueRefund, PayoutHold, ResolveIncident } from '@/components/AdminControls'
 import { SignOutButton } from '@/components/SignOutButton'
 import { RESPONSE_TARGET_MINUTES, type IncidentSeverity } from '@/domain/incident'
 import { Alert, Card, Shell, Stack } from '@/components/ui'
@@ -65,6 +65,10 @@ export default async function AdminPage() {
   const overdue = items.filter((i) => i.overdue)
   const canRelease = hasPermission(auth.auth.roles, 'payout:release')
   const canHold = hasPermission(auth.auth.roles, 'payout:hold')
+  const canRefund = hasPermission(auth.auth.roles, 'refund:issue')
+  const canModerate =
+    hasPermission(auth.auth.roles, 'moderation:act') ||
+    hasPermission(auth.auth.roles, 'account:suspend')
 
   return (
     <Shell nav={<SignOutButton />}>
@@ -129,6 +133,32 @@ export default async function AdminPage() {
             <ResolveIncident incidentId={item.incidentId} />
           </Card>
         ))}
+
+        {canRefund ? (
+          <Card>
+            <h2>Refund a customer</h2>
+            <p className="muted small">
+              {/*
+                The economics, stated, because they are the reason this is
+                a one-field form rather than a workflow.
+              */}
+              Faster than their bank. A chargeback costs about $15 and damages our standing with
+              Stripe, and the money leaves either way.
+            </p>
+            <IssueRefund />
+          </Card>
+        ) : null}
+
+        {canModerate ? (
+          <Card>
+            <h2>Account consequences</h2>
+            <p className="muted small">
+              Strikes, suspensions and bans. There is deliberately no way to fine anybody: the
+              provider is often a minor whose payout account we hold.
+            </p>
+            <AccountAction />
+          </Card>
+        ) : null}
 
         {canHold ? (
           <Card>

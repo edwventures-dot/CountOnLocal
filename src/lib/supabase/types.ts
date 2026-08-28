@@ -21,6 +21,8 @@ export type ReviewStateEnum = 'published' | 'hidden' | 'removed'
 
 export type ReferralStateEnum = 'pending' | 'qualified' | 'paid' | 'void'
 
+export type AccountActionKindEnum = 'strike' | 'suspend' | 'ban' | 'reinstate'
+
 export type ConsentKindEnum =
   | 'guardian_consent'
   | 'public_listing_consent'
@@ -650,6 +652,29 @@ export type Database = {
           revoked_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['referral_codes']['Insert']>
+        Relationships: []
+      }
+      account_actions: {
+        Row: {
+          id: string
+          subject_user_id: string
+          kind: AccountActionKindEnum
+          reason: string
+          incident_id: string | null
+          actor_user_id: string
+          actor_role: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          subject_user_id: string
+          kind: AccountActionKindEnum
+          reason: string
+          incident_id?: string | null
+          actor_user_id: string
+          actor_role?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['account_actions']['Insert']>
         Relationships: []
       }
       consent_records: {

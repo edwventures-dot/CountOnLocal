@@ -8,6 +8,7 @@ import {
   ResumeSubscription,
   SkipVisit,
 } from '@/components/SubscriptionControls'
+import { ReportProblem } from '@/components/ReportProblem'
 import { Alert, Card, Shell, Stack } from '@/components/ui'
 
 export const metadata = { title: 'Your services | Count On Local' }
@@ -191,6 +192,10 @@ export default async function SubscriptionsPage() {
               )}
               <EndSubscription subscriptionId={s.id} kind="cancel" />
             </div>
+
+            {/* Not buried in a footer. The person who needs this is having
+                a bad day and should not have to hunt. */}
+            <ReportProblem subscriptionId={s.id} />
           </Card>
         ))}
 

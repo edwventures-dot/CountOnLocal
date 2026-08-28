@@ -36,6 +36,28 @@ export async function guard(permission: Permission): Promise<Guarded> {
     }
   }
 
+  // A suspended or closed account can still read its own pages -- it needs
+  // to, to find out what happened -- but cannot take any permissioned
+  // action. Checked here rather than at sign-in so a suspension applied
+  // mid-session takes effect on the next request.
+  //
+  // users.status existed from migration 0001 and nothing read it until
+  // now, which meant a suspended account could do everything an active one
+  // could.
+  if (auth.auth.status !== 'active') {
+    return {
+      ok: false,
+      response: apiError(
+        'ACCOUNT_NOT_ACTIVE',
+        auth.auth.status === 'closed'
+          ? 'This account has been closed. Contact support if you think that is wrong.'
+          : 'This account is suspended while we look into a report.',
+        403,
+        { requestId },
+      ),
+    }
+  }
+
   if (!hasPermission(auth.auth.roles, permission)) {
     return {
       ok: false,

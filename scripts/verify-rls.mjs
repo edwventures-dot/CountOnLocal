@@ -38,6 +38,8 @@ const TABLES = [
   'ledger_entries',
   // Signed consents name a minor and carry a guardian's legal signature.
   'consent_records',
+  // Reason text on a sanction would identify who reported somebody.
+  'account_actions',
 ]
 
 let passed = 0

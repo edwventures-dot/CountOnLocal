@@ -75,6 +75,8 @@ export type AuditAction =
   | 'consent.revoked'
   | 'listing.made_public'
   | 'listing.made_private'
+  | 'refund.issued'
+  | 'account.reinstated'
 
 /** Fields that must never appear in an audit snapshot. */
 const REDACTED_KEYS = new Set([
