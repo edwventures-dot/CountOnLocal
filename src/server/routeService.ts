@@ -42,6 +42,7 @@ import {
   type RouteStop,
   type TravelMode,
 } from '@/domain/route'
+import { describeDog, dogWarning } from '@/domain/serviceDetails'
 import { isoDate } from '@/domain/schedule'
 import { civilDateIn } from '@/server/occurrenceJobs'
 import { parsePostgisPoint } from '@/lib/geo'
@@ -71,6 +72,10 @@ export type RouteStopView = {
   } | null
   /** Customer's note for this visit, scope-limited at checkout. */
   instructions: string | null
+  /** Dog on this stop, if the service involves one. */
+  dog: string | null
+  /** Shown as a warning rather than a detail. Bite history decides safety. */
+  dogWarning: string | null
 }
 
 export type TodayRoute = {
@@ -119,6 +124,7 @@ export async function getTodayRoute(args: {
        service_window_start, service_window_end, service_value_cents,
        subscriptions!inner (
          customer_instructions,
+         service_details,
          customer_addresses!inner (
            line1, line2, city, region, postal_code, access_notes, point
          ),
@@ -187,7 +193,11 @@ export async function getTodayRoute(args: {
 
   const stops: RouteStopView[] = ordered.order.map((id, i) => {
     const r = byId.get(id)!
-    const sub = one<{ customer_instructions: string | null; customer_addresses: unknown }>(
+    const sub = one<{
+      customer_instructions: string | null
+      service_details: unknown
+      customer_addresses: unknown
+    }>(
       r.subscriptions as never,
     )
     const addr = one<{
@@ -218,6 +228,11 @@ export async function getTodayRoute(args: {
           }
         : null,
       instructions: sub?.customer_instructions ?? null,
+      // Structured, not folded into the instructions text. A provider
+      // skimming a paragraph on a phone will not reliably notice the
+      // sentence that says the dog has bitten somebody.
+      dog: describeDog(sub?.service_details as never) ?? null,
+      dogWarning: dogWarning(sub?.service_details as never) ?? null,
     }
   })
 

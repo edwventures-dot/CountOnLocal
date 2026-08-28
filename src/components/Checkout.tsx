@@ -29,6 +29,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Alert, Field } from '@/components/ui'
 import { CUSTOMER_ATTESTATION } from '@/domain/consent'
+import { BITE_HISTORY, DOG_SIZES } from '@/domain/serviceDetails'
 
 type Preview = {
   business: { name: string; slug: string }
@@ -81,7 +82,14 @@ function useStripeJs(): boolean {
   return ready
 }
 
-export function Checkout({ serviceId }: { serviceId: string }) {
+export function Checkout({
+  serviceId,
+  serviceCatalogHint = '',
+}: {
+  serviceId: string
+  /** Catalog code, so dog fields appear for dog services. */
+  serviceCatalogHint?: string
+}) {
   const router = useRouter()
   const [stage, setStage] = useState<Stage>({ name: 'address' })
   const [error, setError] = useState<string | null>(null)
@@ -93,8 +101,19 @@ export function Checkout({ serviceId }: { serviceId: string }) {
   const [postalCode, setPostalCode] = useState('')
   const [instructions, setInstructions] = useState('')
   const [referralCode, setReferralCode] = useState('')
+  const [dogName, setDogName] = useState('')
+  const [dogSize, setDogSize] = useState<string>('medium')
+  const [dogRestraint, setDogRestraint] = useState('')
+  const [dogBite, setDogBite] = useState<string>('')
   const [acknowledged, setAcknowledged] = useState<string[]>([])
   const [typedName, setTypedName] = useState('')
+
+  // The preview says which service this is; dog fields only appear for a
+  // service that involves one.
+  const needsDog =
+    stage.name === 'review' && /dog/i.test(stage.preview.serviceName + ' ' + serviceCatalogHint)
+  const dogComplete =
+    !needsDog || (dogName.trim() && dogRestraint.trim() && dogBite !== '')
 
   const allAcknowledged = CUSTOMER_ATTESTATION.items.every((i) => acknowledged.includes(i.key))
   const signatureLooksReal = typedName.trim().length >= 3
@@ -143,6 +162,18 @@ export function Checkout({ serviceId }: { serviceId: string }) {
         providerServiceId: serviceId,
         address,
         attestation: { acknowledgedItems: acknowledged, typedName },
+        ...(needsDog
+          ? {
+              serviceDetails: {
+                dog: {
+                  name: dogName,
+                  size: dogSize,
+                  restraint: dogRestraint,
+                  biteHistory: dogBite,
+                },
+              },
+            }
+          : {}),
         ...(instructions.trim() ? { customerInstructions: instructions.trim() } : {}),
         ...(referralCode.trim() ? { referralCode: referralCode.trim() } : {}),
       })
@@ -305,6 +336,67 @@ export function Checkout({ serviceId }: { serviceId: string }) {
           same array that gets hashed into the signed record, so what is on
           screen and what is stored cannot drift.
         */}
+        {needsDog ? (
+          <fieldset className="attest">
+            <legend className="field__label">About your dog</legend>
+            {/*
+              Asked because the attestation promises it, and shown to the
+              provider as a warning rather than buried in instructions.
+              Bite history decides whether a teenager should take this
+              animal down a street.
+            */}
+            <p className="field__hint">
+              Your walker sees this before they arrive. Answer honestly — it is what keeps them
+              safe.
+            </p>
+            <Field
+              label="Name"
+              name="dogName"
+              value={dogName}
+              onChange={(e) => setDogName(e.target.value)}
+            />
+            <label className="field">
+              <span className="field__label">Size</span>
+              <select
+                className="field__input"
+                value={dogSize}
+                onChange={(e) => setDogSize(e.target.value)}
+              >
+                {DOG_SIZES.map((sz) => (
+                  <option key={sz} value={sz}>
+                    {sz}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Field
+              label="Walked on"
+              name="dogRestraint"
+              hint="A collar, a harness, both."
+              value={dogRestraint}
+              onChange={(e) => setDogRestraint(e.target.value)}
+            />
+            <label className="field">
+              <span className="field__label">Has this dog ever bitten anyone?</span>
+              <span className="field__hint">
+                Including another animal. &ldquo;Not sure&rdquo; is a real answer and a useful one.
+              </span>
+              <select
+                className="field__input"
+                value={dogBite}
+                onChange={(e) => setDogBite(e.target.value)}
+              >
+                <option value="">Choose one</option>
+                {BITE_HISTORY.map((b) => (
+                  <option key={b} value={b}>
+                    {b === 'none' ? 'No, never' : b === 'yes' ? 'Yes' : 'I am not sure'}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </fieldset>
+        ) : null}
+
         <fieldset className="attest">
           <legend className="field__label">{CUSTOMER_ATTESTATION.title}</legend>
           <p className="field__hint">{CUSTOMER_ATTESTATION.intro}</p>
@@ -343,7 +435,7 @@ export function Checkout({ serviceId }: { serviceId: string }) {
           className="btn btn--full"
           type="button"
           onClick={confirm}
-          disabled={busy || !allAcknowledged || !signatureLooksReal}
+          disabled={busy || !allAcknowledged || !signatureLooksReal || !dogComplete}
         >
           {busy ? 'Setting up...' : 'Continue to payment'}
         </button>

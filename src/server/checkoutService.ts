@@ -27,6 +27,7 @@ import { todayUtc } from '@/server/providerOnboarding'
 import { writeAudit } from '@/server/audit'
 import { attachReferral } from '@/server/referralService'
 import { recordConsent } from '@/server/consentService'
+import { checkServiceDetails } from '@/domain/serviceDetails'
 import { DEFAULT_REFERRAL_TERMS } from '@/domain/referral'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
@@ -238,6 +239,12 @@ export const createSubscriptionSchema = previewSchema.extend({
    *
    * Validated against domain/consent.ts and stored as a signed record.
    */
+  /**
+   * Per-category safety details. Required for dog services -- the
+   * attestation the customer signs promises them, and until now there was
+   * nowhere to put them.
+   */
+  serviceDetails: z.record(z.string(), z.unknown()).optional(),
   attestation: z.object({
     acknowledgedItems: z.array(z.string().max(64)).min(1).max(32),
     typedName: z.string().trim().min(3).max(120),
@@ -279,6 +286,7 @@ export type CreateSubscriptionResult =
         | 'GEOCODER_UNAVAILABLE'
         | 'UNSUPPORTED_COUNTRY'
         | 'ATTESTATION_INVALID'
+        | 'SERVICE_DETAILS_REQUIRED'
         | 'WRITE_FAILED'
       message?: string
     }
@@ -401,6 +409,25 @@ export async function createSubscription(args: {
     }
   }
 
+  // Safety details for this category, checked against the catalog code the
+  // service actually belongs to rather than anything the caller claimed.
+  const { data: catalogRow } = await db
+    .from('provider_services')
+    .select('service_catalog!inner(code)')
+    .eq('id', input.providerServiceId)
+    .maybeSingle()
+  const catalogCode =
+    (
+      (Array.isArray(catalogRow?.service_catalog)
+        ? catalogRow?.service_catalog[0]
+        : catalogRow?.service_catalog) as { code?: string } | undefined
+    )?.code ?? null
+
+  const details = checkServiceDetails({ catalogCode, input: input.serviceDetails })
+  if (!details.ok) {
+    return { ok: false, code: 'SERVICE_DETAILS_REQUIRED', message: details.message }
+  }
+
   const { data: subscription, error: subError } = await db
     .from('subscriptions')
     .insert({
@@ -418,6 +445,7 @@ export async function createSubscription(args: {
       current_cycle_start: isoDate(window.start),
       current_cycle_end: isoDate(window.end),
       customer_instructions: input.customerInstructions ?? null,
+      service_details: details.details,
     })
     .select('id')
     .single()

@@ -24,6 +24,8 @@ type Stop = {
     accessNotes: string | null
   } | null
   instructions: string | null
+  dog: string | null
+  dogWarning: string | null
 }
 
 type Route = {
@@ -195,6 +197,21 @@ export default async function TodayPage() {
                     Between {clock(stop.window.start)} and {clock(stop.window.end)}
                   </p>
                 ) : null}
+
+                {stop.dogWarning ? (
+                  /*
+                    Above the address and the instructions, and styled as a
+                    warning rather than a detail. Bite history decides
+                    whether a fourteen-year-old should take this animal
+                    down a street, and it must not be something they scroll
+                    past.
+                  */
+                  <p className="danger-note" role="alert">
+                    <strong>Careful:</strong> {stop.dogWarning}
+                  </p>
+                ) : null}
+
+                {stop.dog ? <p className="small">Dog: {stop.dog}</p> : null}
 
                 {stop.instructions ? (
                   <p className="small">

@@ -33,6 +33,7 @@ export const NOTIFICATION_KINDS = [
   'guardian.approval_requested',
   'guardian.approved',
   'guardian.revoked',
+  'guardian.aged_out',
   'business.published',
   'subscription.new_subscriber',
   'subscription.payment_failed',

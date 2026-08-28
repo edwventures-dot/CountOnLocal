@@ -43,7 +43,7 @@ export default async function CheckoutPage({ params }: Params) {
 
   const { data: service } = await db
     .from('provider_services')
-    .select('id, public_name, businesses!inner(name, slug)')
+    .select('id, public_name, service_catalog!inner(code), businesses!inner(name, slug)')
     .eq('id', serviceId)
     .maybeSingle()
 
@@ -59,6 +59,15 @@ export default async function CheckoutPage({ params }: Params) {
   }
 
   const business = service.businesses as unknown as { name: string; slug: string }
+  // Passed so the checkout form knows whether to ask about a dog. Read
+  // from the catalog rather than guessed from the public name, which a
+  // provider chooses freely.
+  const catalogCode =
+    (
+      (Array.isArray(service.service_catalog)
+        ? service.service_catalog[0]
+        : service.service_catalog) as { code?: string } | undefined
+    )?.code ?? ''
 
   return (
     <Shell nav={<SignOutButton />} narrow>
@@ -67,7 +76,7 @@ export default async function CheckoutPage({ params }: Params) {
         {service.public_name} from <Link href={`/${business.slug}`}>{business.name}</Link>
       </p>
       <Card>
-        <Checkout serviceId={serviceId} />
+        <Checkout serviceId={serviceId} serviceCatalogHint={catalogCode} />
       </Card>
     </Shell>
   )

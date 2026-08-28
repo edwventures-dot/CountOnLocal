@@ -113,6 +113,8 @@ export async function POST(req: Request): Promise<Response> {
         return apiError(result.code, 'This route is full right now. Ask to be told when a spot opens.', 409, { requestId })
       case 'ALREADY_SUBSCRIBED':
         return apiError(result.code, 'You already have this service at that address.', 409, { requestId })
+      case 'SERVICE_DETAILS_REQUIRED':
+        return apiError(result.code, result.message ?? 'Tell us about the dog.', 422, { requestId })
       case 'INVALID_START_DATE':
         return apiError(result.code, 'Choose one of the offered start dates.', 422, { requestId })
       case 'ADDRESS_NOT_FOUND':

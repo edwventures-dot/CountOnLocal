@@ -114,6 +114,8 @@ export async function GET(request: Request): Promise<Response> {
       valueCents: s.valueCents,
       address: s.address,
       instructions: s.instructions,
+      dog: s.dog,
+      dogWarning: s.dogWarning,
     })),
   })
 }

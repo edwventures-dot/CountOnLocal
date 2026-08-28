@@ -61,6 +61,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { extendHorizon, promoteDueToday } from '@/server/occurrenceJobs'
 import { runSettlement } from '@/server/settlementService'
 import { runReferralRewards } from '@/server/referralService'
+import { runAgeOut } from '@/server/agingJob'
 import { dispatchNotifications, setNotifier } from '@/server/notifications'
 import { ResendNotifier, resendConfigFromEnv } from '@/server/resendNotifier'
 import { purgeExpiredMessages } from '@/server/messageService'
@@ -75,6 +76,7 @@ type JobName =
   | 'extend-horizon'
   | 'due-today'
   | 'settle'
+  | 'age-out'
   | 'referral-rewards'
   | 'notify'
   | 'purge-messages'
@@ -83,6 +85,7 @@ const JOBS: readonly JobName[] = [
   'extend-horizon',
   'due-today',
   'settle',
+  'age-out',
   'referral-rewards',
   'notify',
   'purge-messages',
@@ -151,6 +154,10 @@ export async function GET(request: Request): Promise<Response> {
   // cycle was actually charged. Running it first would leave every referral
   // waiting an extra four hours for a charge that had already happened by
   // the time anyone looked.
+  // Before referrals and before notification dispatch, so a provider who
+  // turned 18 overnight is an adult for everything that runs after it in
+  // the same pass.
+  await run('age-out', () => runAgeOut({ db, now }))
   await run('referral-rewards', () => runReferralRewards({ db, now }))
   // Last, so anything the earlier jobs queued goes out in the same run
   // rather than waiting four hours.

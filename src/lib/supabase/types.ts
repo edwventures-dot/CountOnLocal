@@ -380,6 +380,7 @@ export type Database = {
           stripe_customer_id: string | null
           stripe_payment_method_id: string | null
           customer_instructions: string | null
+          service_details: Record<string, unknown>
           started_at: string | null
           canceled_at: string | null
         } & Timestamps
@@ -400,6 +401,7 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_payment_method_id?: string | null
           customer_instructions?: string | null
+          service_details?: Record<string, unknown>
           started_at?: string | null
           canceled_at?: string | null
         }

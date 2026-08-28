@@ -1,11 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  parsePlainDate,
-  ageInYearsOn,
-  classifyAge,
-  decideProviderAge,
-  isEligibleCustomerAge,
-} from '../age'
+import { parsePlainDate, ageInYearsOn, classifyAge, decideProviderAge, isEligibleCustomerAge, eighteenthBirthday, daysUntilEighteen, hasAgedOut } from '../age'
 
 const on = (s: string) => parsePlainDate(s)
 
@@ -98,5 +92,50 @@ describe('customer age - PRD section 6 requires 18+', () => {
   it('admits 18 and rejects 17', () => {
     expect(isEligibleCustomerAge(on('2008-08-24'), today)).toBe(true)
     expect(isEligibleCustomerAge(on('2008-08-25'), today)).toBe(false)
+  })
+})
+
+describe('turning eighteen', () => {
+  const d = (year: number, month: number, day: number) => ({ year, month, day })
+
+  it('is the same date eighteen years later', () => {
+    expect(eighteenthBirthday(d(2008, 6, 15))).toEqual(d(2026, 6, 15))
+  })
+
+  it('moves a 29 February birthday to 1 March in a non-leap year', () => {
+    // 2008 + 18 = 2026, which is not a leap year. Somebody born on the
+    // 29th does not get to stay seventeen for an extra year.
+    expect(eighteenthBirthday(d(2008, 2, 29))).toEqual(d(2026, 3, 1))
+  })
+
+  it('keeps 29 February when the target year is a leap year', () => {
+    // 2006 + 18 = 2024, which is.
+    expect(eighteenthBirthday(d(2006, 2, 29))).toEqual(d(2024, 2, 29))
+  })
+
+  it('counts down to it', () => {
+    expect(daysUntilEighteen(d(2008, 6, 15), d(2026, 6, 14))).toBe(1)
+    expect(daysUntilEighteen(d(2008, 6, 15), d(2026, 5, 16))).toBe(30)
+  })
+
+  it('goes negative afterwards', () => {
+    expect(daysUntilEighteen(d(2008, 6, 15), d(2026, 6, 16))).toBe(-1)
+  })
+
+  it('ages out on the birthday, not the day after', () => {
+    expect(hasAgedOut(d(2008, 6, 15), d(2026, 6, 14))).toBe(false)
+    expect(hasAgedOut(d(2008, 6, 15), d(2026, 6, 15))).toBe(true)
+  })
+
+  it('agrees with classifyAge, so the gates and the job cannot disagree', () => {
+    // The job that clears guardian state and the gates that read it must
+    // use one definition of how old somebody is.
+    for (const [dob, today] of [
+      [d(2008, 6, 15), d(2026, 6, 14)],
+      [d(2008, 6, 15), d(2026, 6, 15)],
+      [d(2011, 1, 1), d(2026, 8, 28)],
+    ] as const) {
+      expect(hasAgedOut(dob, today)).toBe(classifyAge(dob, today) === 'adult')
+    }
   })
 })

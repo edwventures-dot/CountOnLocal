@@ -89,3 +89,39 @@ export function decideProviderAge(dob: PlainDate, on: PlainDate): ProviderAgeDec
 export function isEligibleCustomerAge(dob: PlainDate, on: PlainDate): boolean {
   return ageInYearsOn(dob, on) >= CUSTOMER_MIN_AGE
 }
+
+/**
+ * The day somebody stops needing a guardian.
+ *
+ * Returned as a civil date rather than an instant, for the same reason
+ * service dates are: a birthday is a day where the person lives, not a
+ * moment in UTC. Somebody born on 29 February ages out on 1 March in
+ * non-leap years, which is the convention every jurisdiction that has
+ * bothered to write it down uses.
+ */
+export function eighteenthBirthday(dob: PlainDate): PlainDate {
+  const year = dob.year + GUARDIAN_REQUIRED_BELOW_AGE
+
+  if (dob.month === 2 && dob.day === 29 && daysInMonth(year, 2) === 28) {
+    return { year, month: 3, day: 1 }
+  }
+  return { year, month: dob.month, day: dob.day }
+}
+
+/** Whole days until that birthday. Negative once it has passed. */
+export function daysUntilEighteen(dob: PlainDate, today: PlainDate): number {
+  const target = eighteenthBirthday(dob)
+  const toUtc = (d: PlainDate) => Date.UTC(d.year, d.month - 1, d.day)
+  return Math.round((toUtc(target) - toUtc(today)) / 86_400_000)
+}
+
+/**
+ * Whether this provider should no longer be treated as a minor.
+ *
+ * Uses the same age arithmetic as every other check rather than comparing
+ * dates directly, so there is exactly one definition of how old somebody
+ * is and the gates cannot disagree with the job that clears them.
+ */
+export function hasAgedOut(dob: PlainDate, today: PlainDate): boolean {
+  return ageInYearsOn(dob, today) >= GUARDIAN_REQUIRED_BELOW_AGE
+}

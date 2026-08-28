@@ -443,3 +443,20 @@ input[type='range'].field__input {
   flex: none;
   accent-color: var(--col-ink);
 }
+
+/**
+ * A safety warning on a route stop.
+ *
+ * Louder than the access note, because that one is a convenience and this
+ * one is about an animal that has bitten somebody. Not colour alone --
+ * the word "Careful" and role="alert" carry it too.
+ */
+.danger-note {
+  border-left: 4px solid var(--col-red);
+  background: #fdf1f1;
+  color: #8a2b2b;
+  padding: var(--space-3);
+  border-radius: 0 var(--col-radius-control) var(--col-radius-control) 0;
+  font-size: 15px;
+  font-weight: 600;
+}
