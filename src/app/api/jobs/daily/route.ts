@@ -62,6 +62,7 @@ import { extendHorizon, promoteDueToday } from '@/server/occurrenceJobs'
 import { runSettlement } from '@/server/settlementService'
 import { runReferralRewards } from '@/server/referralService'
 import { runAgeOut } from '@/server/agingJob'
+import { runPayouts } from '@/server/payoutService'
 import { dispatchNotifications, setNotifier } from '@/server/notifications'
 import { ResendNotifier, resendConfigFromEnv } from '@/server/resendNotifier'
 import { purgeExpiredMessages } from '@/server/messageService'
@@ -76,6 +77,7 @@ type JobName =
   | 'extend-horizon'
   | 'due-today'
   | 'settle'
+  | 'pay-out'
   | 'age-out'
   | 'referral-rewards'
   | 'notify'
@@ -85,6 +87,7 @@ const JOBS: readonly JobName[] = [
   'extend-horizon',
   'due-today',
   'settle',
+  'pay-out',
   'age-out',
   'referral-rewards',
   'notify',
@@ -154,6 +157,12 @@ export async function GET(request: Request): Promise<Response> {
   // cycle was actually charged. Running it first would leave every referral
   // waiting an extra four hours for a charge that had already happened by
   // the time anyone looked.
+  // Directly after settlement, which is what makes payout "immediate":
+  // a provider is paid within one run of being credited. Separate from
+  // settlement because it fails for different reasons -- most often a
+  // platform balance that has not settled yet -- and must be retryable
+  // without re-running the charge.
+  await run('pay-out', () => runPayouts({ db, now }))
   // Before referrals and before notification dispatch, so a provider who
   // turned 18 overnight is an adult for everything that runs after it in
   // the same pass.

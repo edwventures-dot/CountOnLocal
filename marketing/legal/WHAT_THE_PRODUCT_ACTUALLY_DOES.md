@@ -16,9 +16,9 @@ money is involved, against real Stripe test mode.
 
 ## 1. Things the drafts assumed that were not true
 
-Two of the four are now built and the consent wording has been corrected
-to match. Two remain, and they are the only items in this file that are
-actively wrong today.
+Three of the four are now built and the consent wording has been
+corrected to match. One remains, and it is the only item in this file
+that is actively wrong today.
 
 ### 1.1 Completion photos — BUILT 2026-08-28
 
@@ -69,14 +69,30 @@ a different moment.
 time.** The honest phrasing is that the consent is attributable to an
 authenticated account holder.
 
-### 1.4 Payouts do not happen yet
+### 1.4 Payouts — BUILT 2026-08-28
 
-The ledger records what each provider is owed, to the cent, and balances.
-**Nothing transfers it.** There is no payout execution, so "payouts are
-immediate" is not currently true or false — it is unimplemented.
+Was: the ledger recorded what was owed and nothing moved it. Now built.
 
-Anything the documents say about payout timing is describing future
-behaviour. Say so, or omit it.
+- Paid as a Stripe Connect transfer to the account that holds the money —
+  the **guardian's** account for a provider aged 13-17, which is what the
+  guardian consented to.
+- "Immediate" means **within one job run** of being credited: it runs in
+  the same daily pass as settlement, directly after it. Not literally
+  instant, and the documents should not say instant.
+- Nothing is paid while a payout hold is open, while the guardian is not
+  cleared, or before Stripe onboarding is finished. In each case the money
+  stays owed rather than being forfeited.
+- An unsettled platform balance is treated as waiting rather than
+  failing — card payments take days to settle and the next run retries.
+- Stripe pays the connected account out to its bank on **its own
+  schedule**. That second leg is Stripe's, not ours, and the documents
+  should not describe it as something we control.
+
+One thing counsel should know: the successful transfer leg has not been
+exercised against real Stripe, because completing Express onboarding
+needs a browser. What WAS exercised live: an account without the
+transfers capability is refused and no ledger row is written. The success
+path is covered by integration tests against a stubbed processor.
 
 ---
 

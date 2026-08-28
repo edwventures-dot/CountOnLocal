@@ -144,3 +144,73 @@ export function canReceivePayments(args: {
 
   return { allowed: true }
 }
+
+export type PayoutPlan =
+  | { pay: true; amountCents: number; idempotencyKey: string }
+  | {
+      pay: false
+      reason: 'NOTHING_OWED' | 'ON_HOLD' | PayoutGateDenial
+    }
+
+/**
+ * Whether to move money to a provider now, and how much.
+ *
+ * ## The idempotency key is the interesting part
+ *
+ * A cycle charge keys naturally on the cycle it pays for. A payout has no
+ * such anchor -- it is "whatever is owed at this moment", and the obvious
+ * keys are all wrong:
+ *
+ *   - by date: a provider who earns twice in a day gets paid once;
+ *   - by amount and date: earn 300, get paid, earn 300 again, and the
+ *     second transfer is deduplicated against the first. Stripe returns
+ *     the original, no money moves, and a ledger row is written for a
+ *     transfer that did not happen.
+ *
+ * So the key is cumulative lifetime earnings, which only ever increases
+ * and is different at every point money is owed. Re-running the job with
+ * nothing new earned produces the same key and the same transfer;
+ * re-running after new work produces a different one.
+ *
+ * That also makes the failure ordering safe. Transfer first, then write
+ * the ledger row: if the row fails, the balance is unchanged, so the next
+ * run computes the same key, Stripe returns the original transfer rather
+ * than making a second, and the row is written on the retry.
+ */
+export function planPayout(args: {
+  providerUserId: string
+  balanceCents: number
+  /** Sum of every provider_earning ever, as a positive number. */
+  lifetimeEarnedCents: number
+  held: boolean
+  gate: PayoutGate
+}): PayoutPlan {
+  // Holds first. A hold exists because somebody is looking into
+  // something, and "they were owed it anyway" is not a reason to send it
+  // while that is open.
+  if (args.held) return { pay: false, reason: 'ON_HOLD' }
+
+  if (!args.gate.allowed) return { pay: false, reason: args.gate.code }
+
+  if (args.balanceCents <= 0) return { pay: false, reason: 'NOTHING_OWED' }
+
+  return {
+    pay: true,
+    amountCents: args.balanceCents,
+    // No minimum. A fourteen-year-old owed $3 gets $3 -- Connect
+    // transfers between the platform and a connected account cost
+    // nothing, so a floor would only mean small earners wait longer for
+    // money that is already theirs.
+    idempotencyKey: `payout:${args.providerUserId}:${args.lifetimeEarnedCents}`,
+  }
+}
+
+/** Sum of everything ever earned, positive. The payout key's anchor. */
+export function lifetimeEarnedCents(
+  entries: readonly { kind: string; amountCents: number }[],
+): number {
+  const earned = -entries
+    .filter((e) => e.kind === 'provider_earning')
+    .reduce((a, e) => a + e.amountCents, 0)
+  return earned <= 0 ? 0 : earned
+}

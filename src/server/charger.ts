@@ -78,6 +78,25 @@ export type SetupIntentResult =
     }
   | { ok: false; processor: string; message: string }
 
+export type TransferRequest = {
+  amountCents: number
+  currency: string
+  /** The connected account the money is going to. */
+  destinationRef: string
+  idempotencyKey: string
+  description: string
+}
+
+export type TransferResult =
+  | { ok: true; processor: string; externalId: string }
+  /**
+   * The platform has not got the money yet. Card payments take days to
+   * settle, and a transfer against an unsettled balance is a normal
+   * condition rather than a fault -- retry when it has landed.
+   */
+  | { ok: false; code: 'insufficient_funds'; processor: string; message: string }
+  | { ok: false; code: 'error'; processor: string; message: string }
+
 export interface Charger {
   charge(request: ChargeRequest): Promise<ChargeResult>
   /**
@@ -99,6 +118,15 @@ export interface Charger {
    * credit is spent, "the balance is refundable".
    */
   refund(request: RefundRequest): Promise<RefundResult>
+  /**
+   * Moves earned money to a provider's connected account.
+   *
+   * A Connect transfer, not a bank payout. Stripe then pays the connected
+   * account out to its bank on its own schedule -- that second leg is
+   * theirs to run and is not something this application controls or
+   * should pretend to.
+   */
+  transfer(request: TransferRequest): Promise<TransferResult>
 }
 
 export class StripeCharger implements Charger {
@@ -196,6 +224,42 @@ export class StripeCharger implements Charger {
     }
   }
 
+  async transfer(request: TransferRequest): Promise<TransferResult> {
+    try {
+      const transfer = await stripe().transfers.create(
+        {
+          amount: request.amountCents,
+          currency: request.currency.toLowerCase(),
+          destination: request.destinationRef,
+          description: request.description,
+        },
+        { idempotencyKey: request.idempotencyKey },
+      )
+      return { ok: true, processor: 'stripe', externalId: transfer.id }
+    } catch (err) {
+      const e = err as { code?: string; message?: string }
+
+      // Told apart because they mean different things to the operator: an
+      // unsettled balance resolves itself in a day, and everything else
+      // needs somebody to look.
+      if (e.code === 'balance_insufficient') {
+        return {
+          ok: false,
+          code: 'insufficient_funds',
+          processor: 'stripe',
+          message: 'Waiting for card payments to settle.',
+        }
+      }
+
+      return {
+        ok: false,
+        code: 'error',
+        processor: 'stripe',
+        message: e.message ?? 'Transfer failed.',
+      }
+    }
+  }
+
   async refund(request: RefundRequest): Promise<RefundResult> {
     try {
       const refund = await stripe().refunds.create(
@@ -262,6 +326,24 @@ export class StubCharger implements Charger {
         processor: 'stub',
         externalId: `seti_stub_${request.idempotencyKey}`,
         clientSecret: `seti_stub_${request.idempotencyKey}_secret`,
+      }
+    )
+  }
+
+  readonly transfers: TransferRequest[] = []
+  private transferOutcome: TransferResult | undefined
+
+  setTransferOutcome(outcome: TransferResult): void {
+    this.transferOutcome = outcome
+  }
+
+  async transfer(request: TransferRequest): Promise<TransferResult> {
+    this.transfers.push(request)
+    return (
+      this.transferOutcome ?? {
+        ok: true,
+        processor: 'stub',
+        externalId: `tr_stub_${request.idempotencyKey}`,
       }
     )
   }
