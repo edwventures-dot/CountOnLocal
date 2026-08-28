@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  permissionsFor,
-  hasPermission,
-  requiresAudit,
-  AUDITED_PERMISSIONS,
-  type Role,
-  type Permission,
-} from '../roles'
+import { permissionsFor, hasPermission, requiresAudit, AUDITED_PERMISSIONS, type Role, type Permission, roleGranting } from '../roles'
 
 describe('permissions are additive', () => {
   it('unions the permissions of every held role', () => {
@@ -137,5 +130,55 @@ describe('audited permissions - CLAUDE.md rule 9', () => {
 
   it('audits every staff permission that touches money or identity', () => {
     for (const p of AUDITED_PERMISSIONS) expect(requiresAudit(p)).toBe(true)
+  })
+})
+
+describe('which role authorised an action', () => {
+  it('names the role that grants the permission, not the first one held', () => {
+    // Every account holds `customer` since migration 0028, so roles[0] was
+    // logging staff actions as customer -- corrupting the one record the
+    // trust and safety console exists to produce.
+    expect(roleGranting(['customer', 'trust_safety_agent'], 'incident:manage')).toBe(
+      'trust_safety_agent',
+    )
+    expect(roleGranting(['customer', 'finance_admin'], 'payout:release')).toBe('finance_admin')
+  })
+
+  it('does not depend on the order the roles arrive in', () => {
+    const permission = 'incident:manage' as const
+    expect(roleGranting(['trust_safety_agent', 'customer'], permission)).toBe(
+      roleGranting(['customer', 'trust_safety_agent'], permission),
+    )
+  })
+
+  it('picks the more privileged role when several grant it', () => {
+    // Somebody holding both is acting as the finance admin when they
+    // release a payout, and the log should say so.
+    // payout:hold is one of the few both hold. incident:manage is NOT --
+    // finance_admin does not have it, and the first version of this test
+    // asserted otherwise and was wrong about the permission map.
+    expect(roleGranting(['trust_safety_agent', 'finance_admin'], 'payout:hold')).toBe('finance_admin')
+    expect(roleGranting(['customer', 'support_agent'], 'incident:manage')).toBe('support_agent')
+  })
+
+  it('returns null when nothing grants it', () => {
+    // The caller should have refused already; recording null beats
+    // recording a role that did not apply.
+    expect(roleGranting(['customer'], 'incident:manage')).toBeNull()
+    expect(roleGranting([], 'payout:release')).toBeNull()
+  })
+
+  it('agrees with hasPermission', () => {
+    const cases: Array<[Role[], Permission]> = [
+      [['customer'], 'subscription:create'],
+      [['customer'], 'payout:release'],
+      [['trust_safety_agent'], 'payout:release'],
+      [['finance_admin'], 'payout:release'],
+    ]
+    for (const [roles, permission] of cases) {
+      expect(roleGranting(roles, permission) !== null, `${roles} / ${permission}`).toBe(
+        hasPermission(roles, permission),
+      )
+    }
   })
 })

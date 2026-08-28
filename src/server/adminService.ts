@@ -41,7 +41,7 @@ import {
   type IncidentCategory,
   type IncidentSeverity,
 } from '@/domain/incident'
-import { hasPermission, type Role } from '@/domain/roles'
+import { roleGranting, hasPermission, type Role } from '@/domain/roles'
 import { classifyAge, parsePlainDate } from '@/domain/age'
 import { writeAudit, type AuditAction } from '@/server/audit'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -251,7 +251,10 @@ async function guarded<T>(args: {
 
   await writeAudit({
     actorUserId: args.actor.userId,
-    actorRole: args.actor.roles[0] ?? null,
+    // The role that granted this, not whichever the database returned
+    // first -- see roleGranting. Every account now holds `customer`, so
+    // roles[0] logged staff actions as customer.
+    actorRole: roleGranting(args.actor.roles, args.permission),
     action: args.action,
     targetType: args.targetType,
     targetId: args.targetId,
@@ -425,7 +428,7 @@ export async function readCustomerAddress(args: {
   // Written BEFORE the value is returned. See the header.
   const audited = await writeAuditStrict({
     actorUserId: args.actor.userId,
-    actorRole: args.actor.roles[0] ?? null,
+    actorRole: roleGranting(args.actor.roles, 'address:read_customer'),
     action: 'address.accessed_by_staff',
     targetType: 'customer_address',
     targetId: args.addressId,

@@ -131,3 +131,38 @@ export const AUDITED_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>(
 export function requiresAudit(permission: Permission): boolean {
   return AUDITED_PERMISSIONS.has(permission)
 }
+
+/**
+ * Which of a caller's roles actually authorised an action.
+ *
+ * The audit log records a role alongside the actor, and it used to record
+ * `roles[0]` -- whichever the database happened to return first. That was
+ * right by accident while staff accounts held exactly one role. Migration
+ * 0028 grants `customer` to every account, so a trust and safety agent
+ * resolving an incident started being logged as a customer, which corrupts
+ * the one record the console exists to produce.
+ *
+ * The honest answer is the role that grants the permission being used. Ties
+ * are broken by ROLE_PRECEDENCE, most privileged first, so somebody holding
+ * both finance_admin and support_agent releasing a payout is recorded as
+ * the finance_admin they were acting as.
+ *
+ * Returns null when no role grants it. Callers should already have refused
+ * by then; recording null beats recording a role that did not apply.
+ */
+const ROLE_PRECEDENCE: readonly Role[] = [
+  'platform_admin',
+  'finance_admin',
+  'trust_safety_agent',
+  'support_agent',
+  'guardian',
+  'provider',
+  'customer',
+]
+
+export function roleGranting(roles: readonly Role[], permission: Permission): Role | null {
+  for (const role of ROLE_PRECEDENCE) {
+    if (roles.includes(role) && ROLE_PERMISSIONS[role].includes(permission)) return role
+  }
+  return null
+}

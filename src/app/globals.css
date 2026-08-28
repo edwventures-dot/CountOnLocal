@@ -390,3 +390,22 @@ input[type='range'].field__input {
   border-radius: 0 var(--col-radius-control) var(--col-radius-control) 0;
   font-size: 15px;
 }
+
+/* --- incident severity --------------------------------------------------- */
+
+.sev {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  vertical-align: middle;
+  border: 1px solid;
+}
+
+/* Never colour alone -- UX_UI_SPEC section 5. The letter carries the
+   meaning and the colour reinforces it. */
+.sev--s0 { color: #7a1c1c; background: #fdecec; border-color: var(--col-red); }
+.sev--s1 { color: #8a4a12; background: #fdf3e6; border-color: var(--col-amber); }
+.sev--s2 { color: #1f4b7a; background: #eef4fb; border-color: var(--col-blue); }
+.sev--s3 { color: var(--col-muted); background: var(--col-cream); border-color: var(--col-border); }
