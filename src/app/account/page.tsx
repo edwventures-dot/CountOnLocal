@@ -74,6 +74,19 @@ export default async function AccountPage() {
           </Card>
         )}
 
+        {auth.auth.roles.includes('guardian') ? (
+          <Card>
+            <h2>Someone you look after</h2>
+            <p className="muted">
+              Review what they offer, see their scheduled work, and withdraw your approval if you
+              need to.
+            </p>
+            <Link className="btn" href="/guardian">
+              Guardian view
+            </Link>
+          </Card>
+        ) : null}
+
         <Card>
           <h2>Services you buy</h2>
           <p className="muted">

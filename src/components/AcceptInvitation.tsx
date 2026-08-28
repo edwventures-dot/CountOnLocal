@@ -53,10 +53,13 @@ export function AcceptInvitation({ token }: { token: string }) {
     return (
       <div className="stack">
         <Alert kind="success">You are now connected as their guardian.</Alert>
-        <p className="muted" style={{ marginBottom: 0 }}>
+        <p className="muted">
           They still cannot take a paying customer until your identity is confirmed. We will email
           you when that step is ready.
         </p>
+        <a className="btn btn--full" href="/guardian">
+          See what they are doing
+        </a>
       </div>
     )
   }
