@@ -14,6 +14,7 @@
 
 import { z } from 'zod'
 import { getGeocoder, type AddressInput } from '@/server/geocoder'
+import { checkRegionAllowed } from '@/server/jurisdictionService'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
@@ -58,6 +59,15 @@ export type EligibilityResult =
         | 'ADDRESS_AMBIGUOUS'
         | 'GEOCODER_UNAVAILABLE'
         | 'UNSUPPORTED_COUNTRY'
+        | 'STATE_BLOCKED'
+        | 'SERVICE_BLOCKED_IN_STATE'
+        | 'STATE_NOT_CLEARED'
+      /**
+       * Present for the jurisdiction refusals. The other codes map to a
+       * fixed sentence at the route; these carry the state name and have
+       * to say which one.
+       */
+      message?: string | undefined
     }
 
 /**
@@ -86,13 +96,31 @@ export async function checkAddressEligibility(args: {
   // and so an unpublished service is indistinguishable from a missing one.
   const { data: service } = await db
     .from('provider_services')
-    .select('id, state, businesses!inner(state)')
+    .select('id, state, service_catalog!inner(code), businesses!inner(state)')
     .eq('id', providerServiceId)
     .eq('state', 'active')
     .eq('businesses.state', 'published')
     .maybeSingle()
 
   if (!service) return { ok: false, code: 'SERVICE_NOT_FOUND' }
+
+  // Before the geocoder, deliberately. A refusal costs nothing, whereas a
+  // geocoder call for an address we cannot serve costs money and hands a
+  // third party somebody's house for no reason.
+  //
+  // Product owner's response of 2026-08-30 item 9: the platform is
+  // multi-state, and counsel flags the states that must wait.
+  const jurisdiction = await checkRegionAllowed({
+    db,
+    region: address.region,
+    // The catalog CODE, not the row id: a jurisdiction rule written by
+    // counsel names 'dog_walking', not a uuid nobody can read.
+    catalogCode: (service as { service_catalog?: { code?: string } }).service_catalog?.code,
+  })
+
+  if (!jurisdiction.allowed) {
+    return { ok: false, code: jurisdiction.code, message: jurisdiction.message }
+  }
 
   const input: AddressInput = {
     line1: address.line1,

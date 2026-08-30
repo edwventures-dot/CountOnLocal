@@ -97,6 +97,54 @@ type Timestamps = { created_at: string; updated_at: string }
 export type Database = {
   public: {
     Tables: {
+      /** Migration 0040. Server-owned state and per-service restrictions. */
+      jurisdiction_rules: {
+        Row: {
+          id: string
+          region: string
+          status: string
+          catalog_code: string | null
+          reason: string
+          created_by_user_id: string | null
+          created_at: string
+          lifted_at: string | null
+          lifted_by_user_id: string | null
+          lift_reason: string | null
+        }
+        Insert: {
+          id?: string
+          region: string
+          status: string
+          catalog_code?: string | null
+          reason: string
+          created_by_user_id?: string | null
+          created_at?: string
+          lifted_at?: string | null
+          lifted_by_user_id?: string | null
+          lift_reason?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['jurisdiction_rules']['Insert']>
+        Relationships: []
+      }
+      /** Migration 0040. Configuration changeable without a deploy. */
+      platform_settings: {
+        Row: {
+          key: string
+          value: string
+          description: string
+          updated_at: string
+          updated_by_user_id: string | null
+        }
+        Insert: {
+          key: string
+          value: string
+          description: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['platform_settings']['Insert']>
+        Relationships: []
+      }
       users: {
         Row: {
           id: string

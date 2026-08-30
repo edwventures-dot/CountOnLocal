@@ -168,7 +168,15 @@ export function AddServiceForm({
           priceCents: Math.round(Number(price) * 100),
           priceUnit: 'week',
           billingCycleWeeks: WEEKS_PER_CYCLE,
-          scheduleRule: { frequency: 'weekly', weekdays: [weekday], timezone: 'America/Chicago' },
+          scheduleRule: {
+            frequency: 'weekly',
+            weekdays: [weekday],
+            // The provider's own zone, not Central. A route is promoted at
+            // local midnight, so a hardcoded zone made a Phoenix provider's
+            // Tuesday start on Monday evening -- invisible in Texas and
+            // wrong everywhere else. The server validates it.
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          },
           capacityRule: { maxAddresses: Math.round(Number(capacity)) },
         })
       }}

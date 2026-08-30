@@ -167,6 +167,49 @@ path is covered by integration tests against a stubbed processor.
   the service-area centre point and geometry appear nowhere in the
   response.
 
+### Where the platform operates — BUILT 2026-08-30
+
+From the owner's updated response, item 9: **not Texas-only.** Counsel
+reviews each US jurisdiction and flags any state to restrict until the
+controls it requires exist. The mechanism for that is now built and is
+waiting for counsel's data.
+
+- **A server-owned table**, `jurisdiction_rules`. Readable by anyone
+  (a visitor typing an address must be told "not in your state yet" before
+  reaching a card form); writable by nobody except staff through the admin
+  console. The same posture as the service catalog, for the same reason:
+  the control is worthless if the people it constrains can edit it.
+- **Restrictions are per state and per service.** The blocking question is
+  rarely "may we operate in Ohio" — it is closer to "may a fifteen-year-old
+  be paid to walk a dog in Ohio". A rule with no service code closes the
+  state; a rule with one closes that service there and leaves the rest.
+- **Every rule carries a written reason**, enforced by the schema at a
+  20-character minimum. A restriction nobody explained cannot be reviewed,
+  renewed, or lifted with confidence two years later.
+- **Lifting a restriction is an update, not a delete.** The record of when
+  the platform was closed somewhere survives.
+- **Two postures, one setting.** `open` — operate everywhere except states
+  explicitly blocked, which is the owner's stated position and what runs
+  today. `allowlist` — operate only in states explicitly cleared. If
+  counsel's answer is "we have cleared these five and no others", that is
+  one row change, not a rebuild.
+- **The check runs before the geocoder**, so a refused address costs
+  nothing and is never sent to a third-party geocoder.
+- **It fails closed.** If the rules cannot be read, the answer is no. That
+  is the opposite of how the rest of this codebase degrades, and it is
+  deliberate: guessing wrong means selling a service in a state that
+  prohibits it, which no retry fixes.
+
+Counsel populates the table. Nothing is restricted today, because nobody
+has decided anything is.
+
+**A related bug this uncovered and fixed:** every service created through
+the builder was stamped `America/Chicago` regardless of where the provider
+lived. Routes are promoted at local midnight, so a Phoenix provider's
+Tuesday route was starting on Monday evening. Invisible while the mental
+model was Texas-only. The zone now comes from the provider's own browser
+and is validated server-side.
+
 ### Money
 
 - The provider keeps **100%** of their listed price. There is no provider
@@ -435,6 +478,11 @@ it, and that has not been built.
 
 These map to the counsel items in the owner's response of 2026-08-30:
 
+- **Which states must be restricted at launch**, and whether any service
+  needs restricting in a state that is otherwise open. The mechanism is
+  built and empty; it is data, not code, so an answer can be applied the
+  day it arrives. Also: whether the launch posture should stay `open` or
+  become an explicit `allowlist`.
 - Whether seven years is right, especially for money held for minors.
 - **Whether seven years of dormancy is the right trigger for retiring an
   account.** It is new, and it is the one period here that acts on somebody

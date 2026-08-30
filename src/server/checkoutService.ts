@@ -22,6 +22,7 @@ import {
   type Weekday,
 } from '@/domain/schedule'
 import { parsePlainDate, type PlainDate } from '@/domain/age'
+import { resolveTimeZone } from '@/domain/jurisdiction'
 import { checkAddressEligibility, type AddressFields } from '@/server/eligibility'
 import { todayUtc } from '@/server/providerOnboarding'
 import { writeAudit } from '@/server/audit'
@@ -86,6 +87,15 @@ export type PreviewResult =
         | 'GEOCODER_UNAVAILABLE'
         | 'UNSUPPORTED_COUNTRY'
         | 'NO_SCHEDULE'
+        // Jurisdiction refusals, from the eligibility check. Checkout must
+        // carry them rather than collapsing them into a generic failure:
+        // "not available in your state yet" is a different thing to tell
+        // somebody than "we could not find that address".
+        | 'STATE_BLOCKED'
+        | 'SERVICE_BLOCKED_IN_STATE'
+        | 'STATE_NOT_CLEARED'
+      /** Set for the jurisdiction refusals, which name the state. */
+      message?: string | undefined
     }
 
 /** Reads a stored schedule_rule into the domain shape. */
@@ -108,7 +118,10 @@ export function parseScheduleRule(raw: Record<string, unknown>): ScheduleRule | 
   return {
     frequency,
     weekdays,
-    timezone: typeof raw['timezone'] === 'string' ? raw['timezone'] : 'America/Chicago',
+    // Validated rather than trusted: this arrives from a browser. An
+    // unrecognised zone falls back to Central, which is a last resort now
+    // rather than the default it used to be.
+    timezone: resolveTimeZone(typeof raw['timezone'] === 'string' ? raw['timezone'] : undefined),
     ...(typeof raw['windowStart'] === 'string' ? { windowStart: raw['windowStart'] } : {}),
     ...(typeof raw['windowEnd'] === 'string' ? { windowEnd: raw['windowEnd'] } : {}),
   }
@@ -163,7 +176,13 @@ export async function previewCheckout(args: {
     // geocoding the same house again.
     includePoint: true,
   })
-  if (!eligibility.ok) return { ok: false, code: eligibility.code }
+  if (!eligibility.ok) {
+    return {
+      ok: false,
+      code: eligibility.code,
+      ...(eligibility.message === undefined ? {} : { message: eligibility.message }),
+    }
+  }
 
   const today = todayUtc(now)
   const start = earliestStart({
@@ -288,6 +307,13 @@ export type CreateSubscriptionResult =
         | 'ATTESTATION_INVALID'
         | 'SERVICE_DETAILS_REQUIRED'
         | 'WRITE_FAILED'
+        // Same three as previewCheckout. Subscribing runs the preview
+        // first, so a state closed between the preview and the confirm is
+        // refused here rather than becoming a subscription nobody may
+        // lawfully serve.
+        | 'STATE_BLOCKED'
+        | 'SERVICE_BLOCKED_IN_STATE'
+        | 'STATE_NOT_CLEARED'
       message?: string
     }
 
@@ -319,7 +345,13 @@ export async function createSubscription(args: {
     now,
     ...(args.noticeDays === undefined ? {} : { noticeDays: args.noticeDays }),
   })
-  if (!preview.ok) return { ok: false, code: preview.code }
+  if (!preview.ok) {
+    return {
+      ok: false,
+      code: preview.code,
+      ...(preview.message === undefined ? {} : { message: preview.message }),
+    }
+  }
   if (!preview.preview.eligible) return { ok: false, code: 'NOT_ELIGIBLE' }
   if (preview.preview.atCapacity) return { ok: false, code: 'AT_CAPACITY' }
   if (preview.preview.earliestStartDate === null) return { ok: false, code: 'NO_SCHEDULE' }
