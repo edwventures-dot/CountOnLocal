@@ -11,6 +11,7 @@
  */
 
 import { authenticate, clientIp } from '@/server/auth'
+import { writeAudit } from '@/server/audit'
 import { recordConsent } from '@/server/consentService'
 import { hashIp } from '@/server/audit'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -86,10 +87,26 @@ export async function POST(request: Request): Promise<Response> {
       .maybeSingle()
 
     if (business) {
-      await db
+      const { error: listingError } = await db
         .from('businesses')
         .update({ public_listing_consent_id: result.consentId, searchable: true })
         .eq('id', business.id)
+
+      // CLAUDE.md rule 9 lists publish state among the audited actions, and
+      // the withdrawal path already writes listing.made_private. Only this
+      // direction was missing, so the log recorded minors' pages becoming
+      // private and never becoming findable.
+      if (!listingError) {
+        await writeAudit({
+          actorUserId: auth.auth.userId,
+          actorRole: 'guardian',
+          action: 'listing.made_public',
+          targetType: 'business',
+          targetId: business.id,
+          after: { searchable: true, consent_record_id: result.consentId },
+          reasonCode: 'guardian_consent',
+        })
+      }
     }
   }
 

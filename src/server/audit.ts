@@ -17,75 +17,87 @@ import { createHash } from 'node:crypto'
 import { serverEnv } from '@/lib/env'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
-export type AuditAction =
-  | 'guardian.invited'
-  | 'guardian.invitation_resent'
-  | 'guardian.accepted'
-  | 'guardian.verified'
-  | 'guardian.revoked'
-  | 'guardian.expired'
-  | 'guardian.flagged_for_review'
-  | 'guardian.aged_out'
-  | 'provider.onboarding_started'
-  | 'provider.registration_refused'
-  | 'payout.account_created'
-  | 'payout.onboarding_link_created'
-  | 'payout.account_ready'
-  | 'payout.requirements_due'
-  | 'business.created'
-  | 'business.published'
-  | 'business.paused_guardian'
-  | 'subscription.created'
-  | 'subscription.activated'
-  | 'subscription.canceled'
-  | 'occurrence.completed'
-  | 'occurrence.provider_skipped'
-  | 'occurrence.customer_skipped'
-  | 'occurrence.credited'
-  | 'occurrence.issue_reported'
-  | 'occurrence.canceled'
-  | 'ledger.credit_written'
-  | 'subscription.cycle_settled'
-  | 'subscription.payment_failed'
-  | 'subscription.paused'
-  | 'subscription.resumed'
-  | 'review.reported'
-  | 'review.hidden'
-  | 'review.removed'
-  | 'message.blocked'
-  | 'message.reported'
-  | 'message.redacted'
-  | 'incident.opened'
-  | 'incident.resolved'
-  | 'payout.hold_placed'
-  | 'payout.hold_released'
-  | 'address.accessed_by_staff'
-  | 'service.created'
-  | 'service.wording_refused'
-  | 'service.area_set'
-  | 'service.state_changed'
-  | 'guardian.category_approved'
-  | 'guardian.category_revoked'
-  | 'account.suspended'
-  | 'role.granted'
-  | 'referral.attached'
-  | 'referral.bonus_paid'
-  | 'referral.voided'
-  | 'consent.signed'
-  | 'consent.revoked'
-  | 'listing.made_public'
-  | 'listing.made_private'
-  | 'refund.issued'
-  | 'account.reinstated'
-  | 'photo.viewed_by_staff'
-  | 'payout.sent'
-  | 'account.closed'
-  | 'account.de_identified'
-  | 'account.retired_dormant'
-  | 'jurisdiction.blocked'
-  | 'jurisdiction.allowed'
-  | 'jurisdiction.lifted'
-  | 'jurisdiction.posture_changed'
+/**
+ * Every audited action, as data.
+ *
+ * A union alone cannot be iterated, so nothing could check that each name
+ * has a writer -- and three of them did not. See
+ * src/server/__tests__/auditCoverage.test.ts.
+ */
+export const AUDIT_ACTIONS = [
+  'guardian.invited',
+  'guardian.invitation_resent',
+  'guardian.accepted',
+  'guardian.verified',
+  'guardian.revoked',
+  'guardian.expired',
+  'guardian.flagged_for_review',
+  'guardian.aged_out',
+  'provider.onboarding_started',
+  'provider.registration_refused',
+  'payout.account_created',
+  'payout.onboarding_link_created',
+  'payout.account_ready',
+  'payout.requirements_due',
+  'business.created',
+  'business.published',
+  'business.paused_guardian',
+  'subscription.created',
+  'subscription.activated',
+  'subscription.canceled',
+  'occurrence.completed',
+  'occurrence.provider_skipped',
+  'occurrence.customer_skipped',
+  'occurrence.credited',
+  'occurrence.issue_reported',
+  'occurrence.canceled',
+  'ledger.credit_written',
+  'subscription.cycle_settled',
+  'subscription.payment_failed',
+  'subscription.paused',
+  'subscription.resumed',
+  'review.reported',
+  'review.hidden',
+  'review.removed',
+  'message.blocked',
+  'message.reported',
+  'message.redacted',
+  'incident.opened',
+  'incident.resolved',
+  'payout.hold_placed',
+  'payout.hold_released',
+  'address.accessed_by_staff',
+  'service.created',
+  'service.wording_refused',
+  'service.area_set',
+  'service.state_changed',
+  'guardian.category_approved',
+  'guardian.category_revoked',
+  'account.struck',
+  'account.suspended',
+  'account.banned',
+  'role.granted',
+  'referral.attached',
+  'referral.bonus_paid',
+  'referral.voided',
+  'consent.signed',
+  'consent.revoked',
+  'listing.made_public',
+  'listing.made_private',
+  'refund.issued',
+  'account.reinstated',
+  'photo.viewed_by_staff',
+  'payout.sent',
+  'account.closed',
+  'account.de_identified',
+  'account.retired_dormant',
+  'jurisdiction.blocked',
+  'jurisdiction.allowed',
+  'jurisdiction.lifted',
+  'jurisdiction.posture_changed',
+] as const
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number]
 
 /** Fields that must never appear in an audit snapshot. */
 const REDACTED_KEYS = new Set([

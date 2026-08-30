@@ -261,9 +261,28 @@ export async function acceptGuardianInvitation(args: {
   await adminDb
     .from('guardian_profiles')
     .upsert({ user_id: guardianUserId }, { onConflict: 'user_id' })
-  await adminDb
+  const { data: grantedRole } = await adminDb
     .from('user_roles')
     .upsert({ user_id: guardianUserId, role: 'guardian' }, { onConflict: 'user_id,role' })
+    // Returns the row whether it was inserted or already there, so the
+    // audit below cannot tell them apart on its own -- see the note there.
+    .select('user_id')
+    .maybeSingle()
+
+  // CLAUDE.md rule 9: role changes are audited. Written on every accept
+  // rather than only on first grant, because an upsert cannot report which
+  // it did and a duplicate row in the log is far better than a missing one
+  // for the question this exists to answer.
+  if (grantedRole) {
+    await writeAudit({
+      actorUserId: guardianUserId,
+      actorRole: 'guardian',
+      action: 'role.granted',
+      targetType: 'user',
+      targetId: guardianUserId,
+      after: { role: 'guardian', via: 'guardian_invitation_accepted' },
+    })
+  }
 
   const { error } = await adminDb
     .from('guardian_relationships')

@@ -34,11 +34,26 @@ import {
   type AccountStanding,
 } from '@/domain/enforcement'
 import { checkReason } from '@/domain/incident'
+
+/**
+ * One audit action per kind of account decision.
+ *
+ * Every kind used to write 'account.suspended'. The kind was recorded in
+ * the snapshot so nothing was lost, but the action column is the one that
+ * is filtered and indexed -- an auditor asking "every ban this year" got
+ * nothing, and "every suspension" returned strikes and reinstatements too.
+ */
+const AUDIT_ACTION_FOR: Readonly<Record<AccountActionKind, AuditAction>> = {
+  strike: 'account.struck',
+  suspend: 'account.suspended',
+  ban: 'account.banned',
+  reinstate: 'account.reinstated',
+}
 import { checkRefundAuthorization, type AdminActor } from '@/server/adminService'
 import { roleGranting } from '@/domain/roles'
 import { writeStandaloneEntries } from '@/server/ledgerWriter'
 import { getCharger } from '@/server/charger'
-import { writeAudit } from '@/server/audit'
+import { writeAudit, type AuditAction } from '@/server/audit'
 import type { LedgerEntry } from '@/domain/ledger'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
@@ -284,7 +299,11 @@ export async function applyAccountAction(args: {
   await writeAudit({
     actorUserId: args.actor.userId,
     actorRole: role,
-    action: 'account.suspended',
+    // Named for what actually happened. Every kind used to write
+    // 'account.suspended', so a reinstatement was logged as a suspension
+    // and "show me every ban" returned nothing -- the kind was only in the
+    // snapshot, and the action field is what anybody filters on.
+    action: AUDIT_ACTION_FOR[kind],
     targetType: 'user',
     targetId: args.subjectUserId,
     before: { status: before.status, strikes: before.strikes },

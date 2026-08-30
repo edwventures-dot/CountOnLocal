@@ -46,7 +46,7 @@ import {
   type LedgerEntry,
 } from '@/domain/ledger'
 import type { OccurrenceState } from '@/domain/occurrence'
-import type { PriceUnit } from '@/domain/money'
+import { formatCents, type PriceUnit } from '@/domain/money'
 import { isoDate } from '@/domain/schedule'
 import { civilDateIn } from '@/server/occurrenceJobs'
 import { parseServiceDate } from '@/server/occurrenceService'
@@ -54,6 +54,7 @@ import { writeBalancedEntries } from '@/server/ledgerWriter'
 import { getCharger } from '@/server/charger'
 import { markDiscountSpent, quoteWithReferral } from '@/server/referralService'
 import { writeAudit } from '@/server/audit'
+import { enqueueNotification } from '@/server/notifications'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
@@ -253,6 +254,22 @@ export async function settleSubscription(args: {
           after: { amount_cents: amountToChargeCents },
           reasonCode: 'card_declined',
         })
+
+        // The subscription just stopped and nobody was telling the
+        // customer. They would have found out from a visit that did not
+        // happen, which is the worst possible way to learn a card expired.
+        await notifyCustomer({
+          db,
+          subscriptionId: row.id,
+          customerUserId: row.customer_user_id,
+          now,
+          idempotencyKey: `notify_failed_${idempotencyKey}`,
+          kind: 'subscription.payment_failed',
+          subject: 'Your card was declined',
+          // No amount and no card detail. This says what happened and
+          // where to fix it; the specifics are behind a sign-in.
+          preview: 'Your service is paused until the payment goes through. Update your card to restart it.',
+        })
       }
       return {
         ok: false,
@@ -278,6 +295,22 @@ export async function settleSubscription(args: {
   })
 
   const written = await writeBalancedEntries({ db, entries })
+  if (written.ok) {
+    // A receipt. Money left somebody's account and the product said
+    // nothing -- PRD 20 asks for this and nothing sent it.
+    await notifyCustomer({
+      db,
+      subscriptionId: row.id,
+      customerUserId: row.customer_user_id,
+      now,
+      idempotencyKey: `notify_${idempotencyKey}`,
+      kind: 'cycle.settled',
+      subject: 'Your Count On Local receipt',
+      // The amount is the customer's own charge, so it is safe on a lock
+      // screen. Nothing about the provider, the address or the visits.
+      preview: `${formatCents(quote.customerTotalCents)} for this cycle.`,
+    })
+  }
   if (!written.ok) {
     // Money may have moved. Loud, and left for reconciliation -- re-running
     // is safe and is the repair.
@@ -403,4 +436,57 @@ export async function runSettlement(args: { db: Db; now: Date }): Promise<Settle
   }
 
   return result
+}
+
+/**
+ * Tells a customer something about their own billing.
+ *
+ * Never throws into the settlement path: a receipt that cannot be queued
+ * must not roll back or fail a charge that already succeeded. The outbox is
+ * the retry mechanism, and a missing receipt is a smaller problem than a
+ * payment that appears to have failed when it did not.
+ *
+ * Keyed off the cycle's own idempotency key, so a settlement re-run after a
+ * partial failure does not send a second receipt for one charge.
+ */
+async function notifyCustomer(args: {
+  db: Db
+  subscriptionId: string
+  customerUserId: string
+  now: Date
+  idempotencyKey: string
+  kind: 'cycle.settled' | 'subscription.payment_failed'
+  subject: string
+  preview: string
+}): Promise<void> {
+  try {
+    const { data: user } = await args.db
+      .from('users')
+      .select('email')
+      .eq('id', args.customerUserId)
+      .maybeSingle()
+
+    if (!user?.email) return
+
+    await enqueueNotification({
+      db: args.db,
+      recipientUserId: args.customerUserId,
+      now: args.now,
+      idempotencyKey: args.idempotencyKey,
+      draft: {
+        kind: args.kind,
+        channel: 'email',
+        destination: user.email,
+        subject: args.subject,
+        preview: args.preview,
+        payload: { subscriptionId: args.subscriptionId },
+      },
+    })
+  } catch (err) {
+    console.error('[settlement] could not queue a customer notification', {
+      subscriptionId: args.subscriptionId,
+      kind: args.kind,
+      message: err instanceof Error ? err.message : String(err),
+    })
+  }
 }

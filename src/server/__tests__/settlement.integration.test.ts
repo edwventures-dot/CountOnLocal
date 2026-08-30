@@ -311,6 +311,40 @@ describe('settling a clean cycle', () => {
     expect(rows.find((r) => r.kind === 'customer_charge')?.external_id).toBeTruthy()
   })
 
+  it('sends the customer a receipt', async () => {
+    // Money left somebody's account and the product said nothing. PRD 20
+    // asks for this and nothing sent it -- only four of fifteen
+    // notification kinds were ever enqueued.
+    const subId = await freshSubscription()
+    await settleSubscription({ db: admin, subscriptionId: subId, now: AFTER_CYCLE })
+
+    const { data } = await admin
+      .from('notifications')
+      .select('kind, subject, preview, destination')
+      .eq('kind', 'cycle.settled')
+      .contains('payload', { subscriptionId: subId })
+
+    expect(data).toHaveLength(1)
+    expect(data![0]!.preview).toContain('13.80')
+    // Lock-screen safe: the customer's own amount, and nothing about the
+    // provider, the address or what was done.
+    expect(data![0]!.preview).not.toMatch(/oak|street|provider/i)
+  })
+
+  it('does not send a second receipt when the same cycle is settled again', async () => {
+    const subId = await freshSubscription()
+    await settleSubscription({ db: admin, subscriptionId: subId, now: AFTER_CYCLE })
+    await settleSubscription({ db: admin, subscriptionId: subId, now: AFTER_CYCLE })
+
+    const { count } = await admin
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('kind', 'cycle.settled')
+      .contains('payload', { subscriptionId: subId })
+
+    expect(count).toBe(1)
+  })
+
   it('settles delivered work and advances the cycle window', async () => {
     const subId = await freshSubscription()
     const a = await addOccurrence(subId, '2026-09-01', 'completed')
@@ -443,6 +477,18 @@ describe('a declined card', () => {
 
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.code).toBe('CARD_DECLINED')
+
+    // The subscription just stopped. Without this the customer finds out
+    // from a visit that did not happen.
+    const { data: told } = await admin
+      .from('notifications')
+      .select('kind, preview')
+      .eq('kind', 'subscription.payment_failed')
+      .contains('payload', { subscriptionId: subId })
+
+    expect(told).toHaveLength(1)
+    // No amount and no card detail on a lock screen.
+    expect(told![0]!.preview).not.toMatch(/\$|[0-9]{4}/)
 
     expect(await ledgerFor(subId)).toHaveLength(0)
     expect((await subscriptionRow(subId)).state).toBe('payment_failed')

@@ -94,6 +94,20 @@ export async function startProviderOnboarding(args: {
     return { ok: false, code: 'WRITE_FAILED' }
   }
 
+  // CLAUDE.md rule 9 lists role changes among the actions that must be
+  // audited, and nothing wrote one. 23505 means the role was already held,
+  // which is not a change and does not get a row.
+  if (!roleError) {
+    await writeAudit({
+      actorUserId: userId,
+      actorRole: 'provider',
+      action: 'role.granted',
+      targetType: 'user',
+      targetId: userId,
+      after: { role: 'provider', via: 'provider_onboarding' },
+    })
+  }
+
   await writeAudit({
     actorUserId: userId,
     actorRole: 'provider',
