@@ -14,6 +14,7 @@
     "db:verify:rls": "node --env-file=.env.local scripts/verify-rls.mjs",
     "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
     "test:http": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.http.config.ts",
+    "test:payout:live": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.payout-live.config.ts",
     "waitlist": "node --env-file=.env.local scripts/waitlist.mjs"
   },
   "repository": {
