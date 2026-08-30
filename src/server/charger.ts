@@ -83,9 +83,40 @@ export type TransferRequest = {
   currency: string
   /** The connected account the money is going to. */
   destinationRef: string
+  /**
+   * Per-attempt, and deliberately NOT the logical payout key.
+   *
+   * Stripe caches the response under an idempotency key for 24 hours,
+   * failures included -- proven against the live API: the same key with the
+   * same parameters replayed a stale `balance_insufficient` while $119 sat
+   * available. A stable key therefore turns one transient failure into a
+   * provider who cannot be paid until they happen to earn again.
+   *
+   * So this guards only against a double-submit inside one attempt (an SDK
+   * retry after a timeout). "Has this payout already happened" is answered
+   * by findTransfer instead, which asks Stripe rather than trusting a cache.
+   */
   idempotencyKey: string
+  /**
+   * The logical identity of this payout, as Stripe's transfer_group.
+   *
+   * Stable across attempts, and the thing findTransfer looks up. Chosen
+   * over metadata because transfers.list can filter on transfer_group and
+   * cannot filter on metadata.
+   */
+  groupRef: string
   description: string
 }
+
+export type FindTransferRequest = {
+  groupRef: string
+  destinationRef: string
+}
+
+export type FindTransferResult =
+  | { ok: true; externalId: string | null }
+  /** The question could not be answered. Never treated as "no transfer". */
+  | { ok: false; message: string }
 
 export type TransferResult =
   | { ok: true; processor: string; externalId: string }
@@ -127,6 +158,14 @@ export interface Charger {
    * should pretend to.
    */
   transfer(request: TransferRequest): Promise<TransferResult>
+  /**
+   * Has this payout already been sent?
+   *
+   * Asked before every transfer, so a previous attempt that succeeded and
+   * failed to record itself is recovered rather than paid twice. This is
+   * what makes a fresh idempotency key per attempt safe.
+   */
+  findTransfer(request: FindTransferRequest): Promise<FindTransferResult>
 }
 
 export class StripeCharger implements Charger {
@@ -224,6 +263,22 @@ export class StripeCharger implements Charger {
     }
   }
 
+  async findTransfer(request: FindTransferRequest): Promise<FindTransferResult> {
+    try {
+      const found = await stripe().transfers.list({
+        transfer_group: request.groupRef,
+        destination: request.destinationRef,
+        limit: 1,
+      })
+      return { ok: true, externalId: found.data[0]?.id ?? null }
+    } catch (err) {
+      const e = err as { message?: string }
+      // Deliberately not "no transfer found". Treating an unanswerable
+      // question as a no is how a provider gets paid twice.
+      return { ok: false, message: e.message ?? 'Could not check for an existing transfer.' }
+    }
+  }
+
   async transfer(request: TransferRequest): Promise<TransferResult> {
     try {
       const transfer = await stripe().transfers.create(
@@ -232,6 +287,7 @@ export class StripeCharger implements Charger {
           currency: request.currency.toLowerCase(),
           destination: request.destinationRef,
           description: request.description,
+          transfer_group: request.groupRef,
         },
         { idempotencyKey: request.idempotencyKey },
       )
@@ -333,8 +389,19 @@ export class StubCharger implements Charger {
   readonly transfers: TransferRequest[] = []
   private transferOutcome: TransferResult | undefined
 
-  setTransferOutcome(outcome: TransferResult): void {
-    this.transferOutcome = outcome
+  /** Null clears it, so a test can make a refusal succeed on retry. */
+  setTransferOutcome(outcome: TransferResult | null): void {
+    this.transferOutcome = outcome ?? undefined
+  }
+
+  /** Transfers the stub pretends already exist, keyed by groupRef. */
+  existingTransfers = new Map<string, string>()
+  /** Set to make the lookup itself fail, which must never read as "none". */
+  findOutcome: FindTransferResult | null = null
+
+  async findTransfer(request: FindTransferRequest): Promise<FindTransferResult> {
+    if (this.findOutcome) return this.findOutcome
+    return { ok: true, externalId: this.existingTransfers.get(request.groupRef) ?? null }
   }
 
   async transfer(request: TransferRequest): Promise<TransferResult> {

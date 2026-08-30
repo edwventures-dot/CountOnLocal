@@ -88,11 +88,18 @@ Was: the ledger recorded what was owed and nothing moved it. Now built.
   schedule**. That second leg is Stripe's, not ours, and the documents
   should not describe it as something we control.
 
-One thing counsel should know: the successful transfer leg has not been
-exercised against real Stripe, because completing Express onboarding
-needs a browser. What WAS exercised live: an account without the
-transfers capability is refused and no ledger row is written. The success
-path is covered by integration tests against a stubbed processor.
+**Verified against real Stripe on 2026-08-30**, closing the owner's item 3:
+four real transfers moved money to a connected account, the ledger balanced
+to zero each time, and a second run paid nothing.
+
+That exercise found a real defect, now fixed. The idempotency key was the
+logical payout key, and Stripe caches a response under a key for 24 hours
+— failures included. One transient refusal therefore locked a provider out
+of payouts until they happened to earn again, reported as a benign
+"awaiting settlement". Payouts now ask Stripe whether the transfer already
+exists (by transfer group) before sending, and use a fresh key per attempt,
+so a refusal retries cleanly and a transfer that succeeded without being
+recorded is recovered rather than repeated.
 
 ---
 

@@ -34,6 +34,7 @@
  * idempotency key makes that retry safe.
  */
 
+import { randomUUID } from 'node:crypto'
 import {
   canReceivePayments,
   lifetimeEarnedCents,
@@ -53,6 +54,17 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
 type Db = SupabaseClient<Database>
+
+/**
+ * Distinguishes one transfer attempt from the next.
+ *
+ * Only ever appended to the logical payout key, so it cannot affect which
+ * payout a request is for -- it exists purely so Stripe treats a retry as
+ * a new request rather than replaying a cached refusal.
+ */
+function attemptNonce(): string {
+  return randomUUID().slice(0, 8)
+}
 
 export type PayoutRunResult = {
   considered: number
@@ -149,23 +161,59 @@ export async function runPayouts(args: { db: Db; now: Date }): Promise<PayoutRun
         continue
       }
 
-      const transfer = await getCharger().transfer({
-        amountCents: plan.amountCents,
-        currency: 'USD',
+      // Has this payout already gone out? Asked before every attempt.
+      //
+      // This is what replaced relying on Stripe's idempotency cache. That
+      // cache stores failures too, for 24 hours, so a stable key turned one
+      // transient refusal into a provider who could not be paid until they
+      // happened to earn again -- verified against the live API, where the
+      // same key replayed a stale balance_insufficient while the platform
+      // balance was healthy.
+      const existing = await getCharger().findTransfer({
+        groupRef: plan.idempotencyKey,
         destinationRef: account.accountId!,
-        idempotencyKey: plan.idempotencyKey,
-        description: 'Count On Local earnings',
       })
 
-      if (!transfer.ok) {
-        if (transfer.code === 'insufficient_funds') {
-          // Normal: card payments take days to settle. Not a failure, and
-          // the next run will find the same balance and the same key.
-          skip('AWAITING_SETTLEMENT')
+      if (!existing.ok) {
+        // An unanswerable question is not a no. Creating a transfer here
+        // is how somebody gets paid twice.
+        result.failed.push({ providerUserId, message: existing.message })
+        continue
+      }
+
+      let externalId: string
+      if (existing.externalId) {
+        // A previous attempt moved the money and did not manage to write
+        // the ledger row. Recover it rather than sending again.
+        console.warn('[payout] recovering a transfer that was never recorded', {
+          providerUserId,
+          externalId: existing.externalId,
+        })
+        externalId = existing.externalId
+      } else {
+        const transfer = await getCharger().transfer({
+          amountCents: plan.amountCents,
+          currency: 'USD',
+          destinationRef: account.accountId!,
+          // Fresh per attempt, so a cached failure cannot outlive the
+          // condition that caused it. Correctness comes from the lookup
+          // above, not from this key.
+          idempotencyKey: `${plan.idempotencyKey}:${attemptNonce()}`,
+          groupRef: plan.idempotencyKey,
+          description: 'Count On Local earnings',
+        })
+
+        if (!transfer.ok) {
+          if (transfer.code === 'insufficient_funds') {
+            // Normal: card payments take days to settle. Not a failure, and
+            // the next run retries with a new key against the same group.
+            skip('AWAITING_SETTLEMENT')
+            continue
+          }
+          result.failed.push({ providerUserId, message: transfer.message })
           continue
         }
-        result.failed.push({ providerUserId, message: transfer.message })
-        continue
+        externalId = transfer.externalId
       }
 
       // Positive: the platform's liability to this provider goes down.
@@ -179,7 +227,7 @@ export async function runPayouts(args: { db: Db; now: Date }): Promise<PayoutRun
             providerUserId,
             idempotencyKey: plan.idempotencyKey,
             externalProcessor: 'stripe',
-            externalId: transfer.externalId,
+            externalId,
             memo: 'Earnings paid out',
           },
         ],
@@ -191,7 +239,7 @@ export async function runPayouts(args: { db: Db; now: Date }): Promise<PayoutRun
         // back and Stripe returns this same transfer rather than a second.
         console.error('[payout] ledger write failed after transfer', {
           providerUserId,
-          externalId: transfer.externalId,
+          externalId,
           amountCents: plan.amountCents,
         })
         result.failed.push({ providerUserId, message: 'ledger write failed after transfer' })
@@ -206,7 +254,7 @@ export async function runPayouts(args: { db: Db; now: Date }): Promise<PayoutRun
         targetId: providerUserId,
         after: {
           amount_cents: plan.amountCents,
-          external_id: transfer.externalId,
+          external_id: externalId,
           // Recorded because for a minor this is somebody else's account,
           // and a year from now that should not need reconstructing.
           holder_user_id: profile.payout_account_user_id,

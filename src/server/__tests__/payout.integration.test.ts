@@ -255,6 +255,85 @@ describe('what stops a payout', () => {
     expect((await ledger()).filter((e) => e.kind === 'payout')).toHaveLength(payoutsBefore)
   })
 
+  it('retries with a fresh key after a refusal, so a cached failure cannot stick', async () => {
+    // The bug this closes, found against live Stripe: the idempotency key
+    // was the logical payout key, Stripe caches responses under a key for
+    // 24 hours INCLUDING failures, and that key does not change until the
+    // provider earns more. One transient refusal therefore locked a
+    // provider out of payouts entirely, reported as a benign
+    // AWAITING_SETTLEMENT skip.
+    charger.setTransferOutcome({
+      ok: false,
+      code: 'insufficient_funds',
+      processor: 'stub',
+      message: 'not settled yet',
+    })
+    await earn(700)
+    // The whole owed balance, not the 700 just added: this provider carries
+    // one forward from the tests above, and hardcoding an amount here made
+    // the assertion depend on what ran before it.
+    const owed = balance(await ledger())
+    await runPayouts({ db: admin, now: new Date() })
+
+    const refused = charger.transfers.filter((t) => t.amountCents === owed)
+    expect(refused).toHaveLength(1)
+
+    // Now the balance settles. Same payout, same amount, nothing earned in
+    // between -- so the logical key is identical and the Stripe key must
+    // not be.
+    charger.setTransferOutcome(null)
+    await runPayouts({ db: admin, now: new Date() })
+
+    const attempts = charger.transfers.filter((t) => t.amountCents === owed)
+    expect(attempts).toHaveLength(2)
+    expect(attempts[0]!.groupRef).toBe(attempts[1]!.groupRef)
+    expect(attempts[0]!.idempotencyKey).not.toBe(attempts[1]!.idempotencyKey)
+    expect(balance(await ledger())).toBe(0)
+  })
+
+  it('recovers a transfer that moved money and was never recorded', async () => {
+    // The case the stable key used to cover, now covered by asking Stripe.
+    // Without this, a fresh key per attempt would pay a second time.
+    await earn(450)
+
+    // Stripe says a transfer for this payout already exists.
+    const { data: entries } = await admin
+      .from('ledger_entries')
+      .select('kind, amount_cents')
+      .eq('provider_user_id', providerId)
+    const owed = balance(entries ?? [])
+    const earned = (entries ?? [])
+      .filter((e) => e.kind === 'provider_earning')
+      .reduce((sum, e) => sum - e.amount_cents, 0)
+    charger.existingTransfers.set(`payout:${providerId}:${earned}`, 'tr_already_sent')
+
+    await runPayouts({ db: admin, now: new Date() })
+
+    // No second transfer, and the books now reflect the one that happened.
+    expect(charger.transfers.some((t) => t.amountCents === owed)).toBe(false)
+    const payout = (await ledger()).find((e) => e.external_id === 'tr_already_sent')
+    expect(payout).toBeTruthy()
+    expect(balance(await ledger())).toBe(0)
+    charger.existingTransfers.clear()
+  })
+
+  it('refuses to send when it cannot find out whether it already sent', async () => {
+    // An unanswerable question is not a no.
+    await earn(325)
+    charger.findOutcome = { ok: false, message: 'Stripe unreachable' }
+
+    const r = await runPayouts({ db: admin, now: new Date() })
+
+    expect(charger.transfers.some((t) => t.amountCents === 325)).toBe(false)
+    expect(r.failed.map((f) => f.providerUserId)).toContain(providerId)
+    // Still owed. Nothing was lost by refusing to guess.
+    expect(balance(await ledger())).toBe(325)
+
+    charger.findOutcome = null
+    await runPayouts({ db: admin, now: new Date() })
+    expect(balance(await ledger())).toBe(0)
+  })
+
   it('treats an unsettled balance as waiting, not as a failure', async () => {
     // Card payments take days to settle. That is a normal condition and
     // the next run finds the same balance and the same key.

@@ -40,6 +40,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest'
+import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { createOnboardingLink, syncAccountState } from '@/server/connectOnboarding'
@@ -57,6 +58,55 @@ const admin = createClient<Database>(
 )
 
 let providerUserId = ''
+
+/**
+ * Puts real money in the platform's Stripe balance.
+ *
+ * The first run of this test failed with AWAITING_SETTLEMENT, which was
+ * correct behaviour and a broken fixture: the provider's earning was a
+ * ledger row inserted directly, so nothing had ever actually been charged.
+ * A transfer out of an empty balance is refused, as it should be.
+ *
+ * `pm_card_bypassPending` is Stripe's test payment method that settles
+ * instantly instead of sitting pending for days, which is the only reason
+ * this can run in one pass rather than being a two-day test.
+ */
+async function fundPlatformBalance(neededCents: number): Promise<number> {
+  const stripe = new Stripe(process.env['STRIPE_SECRET_KEY']!, {
+    apiVersion: '2026-07-29.dahlia',
+  })
+
+  const before = await stripe.balance.retrieve()
+  const availableCents = before.available.find((b) => b.currency === 'usd')?.amount ?? 0
+  if (availableCents >= neededCents) return availableCents
+
+  // Comfortably more than one payout, so a re-run does not need topping up
+  // again and the test is not creating a charge on every invocation.
+  await stripe.paymentIntents.create({
+    amount: Math.max(neededCents * 10, 5_000),
+    currency: 'usd',
+    payment_method: 'pm_card_bypassPending',
+    confirm: true,
+    // No redirect-based methods: this runs with nobody at a browser.
+    automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+    description: 'Funding the platform balance for the live payout test',
+  })
+
+  // Poll rather than read once. `pm_card_bypassPending` skips the multi-day
+  // pending period, but the charge still takes a moment to appear in the
+  // available balance -- reading immediately returned 0 and made a funded
+  // account look empty, which is what sent the first attempt down a
+  // wrong diagnosis.
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const after = await stripe.balance.retrieve()
+    const now = after.available.find((b) => b.currency === 'usd')?.amount ?? 0
+    if (now >= neededCents) return now
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+  }
+
+  const final = await stripe.balance.retrieve()
+  return final.available.find((b) => b.currency === 'usd')?.amount ?? 0
+}
 
 /** Finds the fixture provider, creating it the first time. */
 async function ensureFixture(): Promise<string> {
@@ -188,9 +238,19 @@ describe.skipIf(!ENABLED)('a real Stripe transfer', () => {
       if (error) throw new Error(error.message)
     }
 
+    // A transfer needs a settled platform balance to come out of.
+    const available = await fundPlatformBalance(EARNED_CENTS)
+    console.log(`[payout.live] platform balance available: ${available} cents`)
+
     // No stub is installed. This is the real charger against real Stripe,
     // which is the entire point of the file.
     const result = await runPayouts({ db: admin, now: new Date() })
+
+    // Printed unconditionally. The whole reason this file exists is to
+    // diagnose a payout that did not happen against real Stripe, and a
+    // bare "expected undefined to match /^tr_/" says nothing about why.
+    console.log('[payout.live] run result', JSON.stringify(result, null, 2))
+
     expect(result.failed.map((f) => f.providerUserId)).not.toContain(providerUserId)
 
     const rows = await ledger()
@@ -199,6 +259,51 @@ describe.skipIf(!ENABLED)('a real Stripe transfer', () => {
     // A real Stripe transfer id, not a stub's.
     expect(payout?.external_id).toMatch(/^tr_/)
     expect(balanceOf(rows)).toBe(0)
+  })
+
+  it('survives a refusal under the same logical payout', async () => {
+    // The bug this file found: the idempotency key WAS the logical payout
+    // key, and Stripe caches responses under a key for 24 hours including
+    // failures. Verified against the live API -- the same key with the same
+    // parameters replayed a stale balance_insufficient while the platform
+    // balance was healthy, and the only way through was to make the
+    // provider earn another cent.
+    //
+    // The scenario, exactly as it happens in production: a payout is
+    // refused because card payments have not settled, the money lands, and
+    // the retry has the SAME logical key because nothing new was earned.
+    const stripe = new Stripe(process.env['STRIPE_SECRET_KEY']!, {
+      apiVersion: '2026-07-29.dahlia',
+    })
+    const balanceNow = await stripe.balance.retrieve()
+    const available = balanceNow.available.find((b) => b.currency === 'usd')?.amount ?? 0
+
+    // More than the platform holds, so Stripe genuinely refuses.
+    const owe = available + 25_000
+    const { error } = await admin.from('ledger_entries').insert({
+      kind: 'provider_earning',
+      amount_cents: -owe,
+      currency: 'USD',
+      provider_user_id: providerUserId,
+      memo: 'live retry test',
+    })
+    if (error) throw new Error(error.message)
+
+    const refused = await runPayouts({ db: admin, now: new Date() })
+    expect(refused.skipped['AWAITING_SETTLEMENT']).toBe(1)
+
+    // The money settles. Nothing is earned, so the logical key on the
+    // retry is byte-identical to the one Stripe just refused.
+    await fundPlatformBalance(owe)
+
+    const after = await runPayouts({ db: admin, now: new Date() })
+    console.log('[payout.live] retry after refusal', JSON.stringify(after))
+
+    // Under the old design this stayed stuck on the cached refusal until
+    // the provider earned again or 24 hours passed.
+    expect(after.skipped['AWAITING_SETTLEMENT']).toBeUndefined()
+    expect(after.failed).toEqual([])
+    expect(after.paid).toBe(1)
   })
 
   it('does not pay twice', async () => {
