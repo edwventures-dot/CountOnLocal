@@ -460,3 +460,126 @@ input[type='range'].field__input {
   font-size: 15px;
   font-weight: 600;
 }
+
+/* ---------------------------------------------------------------------------
+   Legal documents
+   ---------------------------------------------------------------------------
+   Long-form reading, which the rest of the app is not. Measure is capped at
+   about 70 characters because these pages are read start to finish by
+   somebody deciding whether to trust us, and a full-width paragraph loses
+   the reader's line.
+*/
+
+.legal {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+  color: var(--ink, #12233b);
+}
+
+.legal__brand {
+  display: inline-block;
+  font-weight: 700;
+  text-decoration: none;
+  color: inherit;
+  margin-bottom: 2rem;
+}
+
+.legal__title {
+  font-size: 2rem;
+  line-height: 1.15;
+  margin: 0 0 0.5rem;
+}
+
+.legal__summary {
+  font-size: 1.0625rem;
+  margin: 0 0 0.75rem;
+  color: var(--ink-muted, #4a5b70);
+}
+
+.legal__meta {
+  font-size: 0.875rem;
+  color: var(--ink-muted, #4a5b70);
+  margin: 0 0 2rem;
+}
+
+/* Deliberately the weight of a warning. A draft that looks finished is
+   finished, as far as a reader is concerned. */
+.legal__banner {
+  border: 2px solid #b45309;
+  background: #fffbeb;
+  border-radius: 0.75rem;
+  padding: 1rem 1.125rem;
+  margin: 0 0 2.5rem;
+}
+
+.legal__banner strong {
+  display: block;
+  color: #92400e;
+  margin-bottom: 0.375rem;
+}
+
+.legal__banner p {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.legal__section {
+  margin: 0 0 2.25rem;
+}
+
+.legal__section h2 {
+  font-size: 1.1875rem;
+  margin: 0 0 0.75rem;
+}
+
+.legal__section p {
+  line-height: 1.65;
+  margin: 0 0 0.875rem;
+}
+
+/* Shown rather than omitted: hiding an unwritten section makes the draft
+   look more complete than it is. */
+.legal__pending {
+  border-left: 3px solid #94a3b8;
+  background: #f8fafc;
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.9375rem;
+}
+
+.legal__pending strong {
+  display: block;
+  color: #475569;
+  margin-bottom: 0.25rem;
+}
+
+.legal__pending p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.legal__footer {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1.5rem;
+  margin-top: 3rem;
+  font-size: 0.875rem;
+  color: var(--ink-muted, #4a5b70);
+}
+
+.legal__footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.legal__footer a {
+  color: inherit;
+}
+
+.legal__footer p {
+  margin: 0;
+}

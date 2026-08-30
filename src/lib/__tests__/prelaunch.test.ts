@@ -30,12 +30,27 @@ describe('prelaunchGateEnabled', () => {
 })
 
 describe('prelaunchAllows', () => {
-  it('allows exactly the landing page, the waitlist, and the job runner', () => {
+  it('allows exactly what is meant to answer, and nothing else', () => {
     expect(prelaunchAllows('/')).toBe(true)
     expect(prelaunchAllows('/api/v1/waitlist')).toBe(true)
     // Secret-protected, and 404ing it would make every cron run look failed.
     expect(prelaunchAllows('/api/jobs/daily')).toBe(true)
-    expect(PRELAUNCH_ALLOWED.size).toBe(3)
+    // Static, data-free, and noindexed while they are drafts. Counsel has
+    // to be able to read the rendered page rather than a file in a repo.
+    expect(prelaunchAllows('/terms')).toBe(true)
+    expect(prelaunchAllows('/privacy')).toBe(true)
+    expect(prelaunchAllows('/safety')).toBe(true)
+
+    // The exact set rather than its size. A count is a number nobody reads
+    // in a diff; this makes widening the gate something a reviewer sees.
+    expect([...PRELAUNCH_ALLOWED].sort()).toEqual([
+      '/',
+      '/api/jobs/daily',
+      '/api/v1/waitlist',
+      '/privacy',
+      '/safety',
+      '/terms',
+    ])
   })
 
   it('blocks the marketplace that is not cleared to launch', () => {

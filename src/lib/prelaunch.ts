@@ -37,6 +37,14 @@ export const PRELAUNCH_ALLOWED = new Set([
   // pre-launch it has nothing to do -- there are no subscriptions -- so it
   // costs three empty queries.
   '/api/jobs/daily',
+  // The legal documents. Allowed through the gate because publishing terms
+  // before launch is normal and because counsel has to be able to read the
+  // rendered page, not a file in a repository. They are static, they touch
+  // no data, and while they are drafts they carry a noindex header so a
+  // search result cannot outlive the draft.
+  '/terms',
+  '/privacy',
+  '/safety',
 ])
 
 /**

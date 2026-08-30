@@ -16,6 +16,7 @@
 
 import type { Metadata } from 'next'
 import { AuthFragmentNotice } from '@/components/AuthFragmentNotice'
+import { LegalFooter } from '@/components/LegalPage'
 import { WaitlistForm } from './WaitlistForm'
 import {
   BORDER,
@@ -151,12 +152,9 @@ export default function Home() {
           </p>
         </section>
 
-        <footer style={S.footer}>
-          <p style={{ margin: 0 }}>
-            Count On Local is a product of EDW Ventures. Terms, Privacy and the Safety Center will be
-            published before launch.
-          </p>
-        </footer>
+        {/* One footer definition, so the landing page and the legal pages
+            cannot end up listing different documents. */}
+        <LegalFooter />
       </div>
     </main>
   )
