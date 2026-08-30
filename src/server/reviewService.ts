@@ -28,6 +28,7 @@ import type { OccurrenceState } from '@/domain/occurrence'
 import { parseServiceDate } from '@/server/occurrenceService'
 import { isoDate } from '@/domain/schedule'
 import { writeAudit } from '@/server/audit'
+import { noticeToProviderAndGuardian } from '@/server/providerNotices'
 import type { PlainDate } from '@/domain/age'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
@@ -156,6 +157,22 @@ export async function createReview(args: {
     console.error('[reviews] insert failed', error.message)
     return { ok: false, code: 'WRITE_FAILED', message: 'Could not save that. Try again.' }
   }
+
+  // The provider, and their guardian, hear that a public review exists.
+  //
+  // Deliberately without the rating. A one-star landing as a lock-screen
+  // preview for a fourteen-year-old is a worse way to find out than opening
+  // the page, and the guardian sees the same words rather than a verdict.
+  await noticeToProviderAndGuardian({
+    db,
+    providerUserId: biz.provider_user_id,
+    now: new Date(),
+    idempotencyKey: `review_received:${data!.id}`,
+    kind: 'review.received',
+    subject: 'You have a new review',
+    preview: 'A customer reviewed one of your visits. You can reply to it once.',
+    payload: { reviewId: data!.id },
+  })
 
   return { ok: true, reviewId: data!.id }
 }

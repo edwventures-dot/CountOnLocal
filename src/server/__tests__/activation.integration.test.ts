@@ -225,6 +225,7 @@ beforeEach(async () => {
 })
 
 afterAll(async () => {
+  await admin.from('notifications').delete().eq('recipient_user_id', providerId)
   if (madeReferrals.length) {
     await admin.from('audit_log').delete().in('target_id', madeReferrals)
     await admin.from('referrals').delete().in('id', madeReferrals)
@@ -258,6 +259,39 @@ describe('the happy path', () => {
     expect(charger.requests).toHaveLength(1)
     expect(charger.requests[0]!.amountCents).toBe(TOTAL)
     expect((await subRow(subId)).state).toBe('active')
+  })
+
+  it('tells the provider they have a customer', async () => {
+    // Nothing did. A provider would have discovered a new subscriber from
+    // tomorrow's route, which is the whole point of the product arriving
+    // unannounced.
+    const subId = await pendingSubscription()
+    await activate(subId)
+
+    const { data } = await admin
+      .from('notifications')
+      .select('recipient_user_id, preview')
+      .eq('kind', 'subscription.new_subscriber')
+      .contains('payload', { subscriptionId: subId })
+
+    expect(data).toHaveLength(1)
+    expect(data![0]!.recipient_user_id).toBe(providerId)
+    // Lock-screen safe: nothing about who subscribed or where they live.
+    expect(data![0]!.preview).not.toMatch(/oak|street|@|[0-9]{5}/i)
+  })
+
+  it('does not announce the same subscription twice', async () => {
+    const subId = await pendingSubscription()
+    await activate(subId)
+    await activate(subId)
+
+    const { count } = await admin
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('kind', 'subscription.new_subscriber')
+      .contains('payload', { subscriptionId: subId })
+
+    expect(count).toBe(1)
   })
 
   it('keys the charge on the cycle, the same way settlement does', async () => {

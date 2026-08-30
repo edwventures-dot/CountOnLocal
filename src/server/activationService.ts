@@ -66,6 +66,7 @@ import { markDiscountSpent, quoteWithReferral } from '@/server/referralService'
 import { writeBalancedEntries } from '@/server/ledgerWriter'
 import { getCharger } from '@/server/charger'
 import { writeAudit } from '@/server/audit'
+import { noticeToProviderAndGuardian } from '@/server/providerNotices'
 import type { Role } from '@/domain/roles'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
@@ -452,6 +453,30 @@ export async function activateSubscription(args: {
       cycle_start: sub.cycleStart,
     },
     ip: args.ip ?? null,
+  })
+
+  // A provider gaining a customer is the whole point of the product, and
+  // nothing told them. They would have found out from tomorrow's route.
+  //
+  // After the audit row and after the return value is settled, because a
+  // notice must never be the reason an activated subscription reports a
+  // failure.
+  await noticeToProviderAndGuardian({
+    db,
+    providerUserId: sub.providerUserId,
+    now,
+    // The subscription, not the run: re-activating the same one must not
+    // announce it twice.
+    idempotencyKey: `new_subscriber:${sub.id}`,
+    kind: 'subscription.new_subscriber',
+    subject: 'You have a new customer',
+    // Nothing about who they are or where they live. This says something
+    // happened; the route says the rest, behind a sign-in.
+    // "On your street" was both a leak-shaped phrase and inaccurate -- a
+    // subscriber is anywhere in the service area, not necessarily the same
+    // street.
+    preview: 'Someone nearby subscribed. Their first visit is on your round.',
+    payload: { subscriptionId: sub.id },
   })
 
   return {

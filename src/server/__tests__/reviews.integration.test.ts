@@ -39,6 +39,7 @@ const stamp = Date.now()
 const PRICE = 300
 
 let providerId = ''
+let guardianId = ''
 let customerId = ''
 let otherCustomerId = ''
 let serviceId = ''
@@ -131,6 +132,20 @@ beforeAll(async () => {
     guardian_state: 'verified',
   })
 
+  // A real guardian relationship, not just the state. The provider is a
+  // minor and the consent says the guardian oversees this business, so a
+  // fixture without one cannot show whether they are actually told.
+  guardianId = await makeUser(`rev-guardian-${stamp}@example.com`)
+  await admin.from('guardian_profiles').insert({ user_id: guardianId })
+  await admin.from('guardian_relationships').insert({
+    provider_user_id: providerId,
+    guardian_user_id: guardianId,
+    state: 'verified',
+    consented_at: new Date().toISOString(),
+    invitation_email: `rev-guardian-${stamp}@example.com`,
+    invitation_expires_at: new Date(Date.now() + 14 * 864e5).toISOString(),
+  })
+
   const { data: biz } = await admin
     .from('businesses')
     .insert({
@@ -217,6 +232,9 @@ afterAll(async () => {
     await admin.from('ledger_entries').delete().eq('subscription_id', subscriptionId)
     await admin.from('subscriptions').delete().eq('id', subscriptionId)
   }
+  await admin.from('notifications').delete().in('recipient_user_id', madeUsers)
+  await admin.from('guardian_relationships').delete().eq('provider_user_id', providerId)
+  await admin.from('guardian_profiles').delete().eq('user_id', guardianId)
   await admin.from('customer_addresses').delete().in('customer_user_id', madeUsers)
   for (const id of madeUsers) {
     const { data: u } = await admin.from('users').select('auth_user_id').eq('id', id).maybeSingle()
@@ -224,6 +242,43 @@ afterAll(async () => {
     await admin.from('users').delete().eq('id', id)
     if (u?.auth_user_id) await admin.auth.admin.deleteUser(u.auth_user_id).catch(() => {})
   }
+})
+
+describe('who hears about a review', () => {
+  let reviewId = ''
+
+  it('tells the provider and their guardian, without the rating', async () => {
+    await clearCycle()
+    const r = await review(await makeOccurrence(), 1, 'Missed the bins twice.')
+    if (!r.ok) throw new Error(`review failed: ${r.code}`)
+    reviewId = r.reviewId
+
+    const { data } = await admin
+      .from('notifications')
+      .select('recipient_user_id, preview, subject')
+      .eq('kind', 'review.received')
+      .contains('payload', { reviewId })
+
+    const told = (data ?? []).map((n) => n.recipient_user_id).sort()
+    expect(told).toEqual([providerId, guardianId].sort())
+
+    // A one-star landing as a lock-screen preview for a fourteen-year-old
+    // is a worse way to find out than opening the page. No rating, no
+    // customer, no quote from the body.
+    for (const n of data ?? []) {
+      expect(n.preview).not.toMatch(/1|one star|★/)
+      expect(n.preview).not.toContain('Missed the bins')
+    }
+  })
+
+  it('sends exactly one to each party, not one per run', async () => {
+    const { count } = await admin
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('kind', 'review.received')
+      .contains('payload', { reviewId })
+    expect(count).toBe(2)
+  })
 })
 
 describe('only a delivered visit can be reviewed', () => {

@@ -41,6 +41,7 @@
 import { hasAgedOut, daysUntilEighteen, parsePlainDate } from '@/domain/age'
 import { transition } from '@/domain/guardian'
 import { enqueueNotification } from '@/server/notifications'
+import { providerAndGuardian } from '@/server/providerNotices'
 import { civilDateIn } from '@/server/occurrenceJobs'
 import { writeAudit } from '@/server/audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -167,7 +168,7 @@ async function warn(args: {
   days: number
   now: Date
 }): Promise<void> {
-  const recipients = await bothParties(args.db, args.providerUserId)
+  const recipients = await providerAndGuardian(args.db, args.providerUserId)
 
   for (const { userId, email, role } of recipients) {
     if (!email) continue
@@ -199,7 +200,7 @@ async function notifyAgedOut(args: {
   hadGuardianPayout: boolean
   now: Date
 }): Promise<void> {
-  const recipients = await bothParties(args.db, args.providerUserId)
+  const recipients = await providerAndGuardian(args.db, args.providerUserId)
 
   for (const { userId, email, role } of recipients) {
     if (!email) continue
@@ -225,34 +226,3 @@ async function notifyAgedOut(args: {
   }
 }
 
-async function bothParties(
-  db: Db,
-  providerUserId: string,
-): Promise<Array<{ userId: string; email: string | null; role: 'provider' | 'guardian' }>> {
-  const out: Array<{ userId: string; email: string | null; role: 'provider' | 'guardian' }> = []
-
-  const { data: provider } = await db
-    .from('users')
-    .select('id, email')
-    .eq('id', providerUserId)
-    .maybeSingle()
-  if (provider) out.push({ userId: provider.id, email: provider.email, role: 'provider' })
-
-  const { data: rel } = await db
-    .from('guardian_relationships')
-    .select('guardian_user_id')
-    .eq('provider_user_id', providerUserId)
-    .not('state', 'in', '(revoked,expired)')
-    .maybeSingle()
-
-  if (rel?.guardian_user_id) {
-    const { data: guardian } = await db
-      .from('users')
-      .select('id, email')
-      .eq('id', rel.guardian_user_id)
-      .maybeSingle()
-    if (guardian) out.push({ userId: guardian.id, email: guardian.email, role: 'guardian' })
-  }
-
-  return out
-}

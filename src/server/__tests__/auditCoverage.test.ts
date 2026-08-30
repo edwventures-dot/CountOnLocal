@@ -91,12 +91,10 @@ const NOTIFICATION_NOT_YET_WIRED: Readonly<Record<string, string>> = {
   'guardian.approved': 'the guardian is told by the consent flow itself, on screen',
   'guardian.revoked': 'revocation is immediate and visible in both dashboards',
   'business.published': 'the provider is looking at the page when it happens',
-  'subscription.new_subscriber': 'a provider is not told when somebody subscribes to them',
   'subscription.canceled': 'the customer cancels it themselves and sees the result',
   'occurrence.upcoming': 'no reminder job exists; PRD 20 asks for one',
   'occurrence.completed': 'the customer sees it on their dashboard',
   'occurrence.credited': 'shown as a credit against the next cycle',
-  'review.received': 'reviews now exist in the UI; the provider is not told about one',
   'safety.alert': 'incidents are worked from the console, not pushed',
 }
 
@@ -161,6 +159,14 @@ describe('notification kinds', () => {
   it('does not excuse a kind that is in fact sent', () => {
     const stale = Object.keys(NOTIFICATION_NOT_YET_WIRED).filter((k) => enqueuedKinds.has(k))
     expect(stale).toEqual([])
+  })
+
+  it('tells a provider when they gain a customer or a review', () => {
+    // Both were on the excused list. A provider would have discovered a new
+    // customer from tomorrow's route, and a review from nowhere at all.
+    for (const kind of ['subscription.new_subscriber', 'review.received'] as const) {
+      expect(enqueuedKinds.has(kind), `${kind} is never sent`).toBe(true)
+    }
   })
 
   it('tells a customer when their card is charged or declined', () => {
