@@ -326,6 +326,25 @@ describe('a provider sees their own route', () => {
     }
   })
 
+  it('carries the subscription id, so the provider can reach the messages', () => {
+    // Message threads are keyed by subscription. Without this the provider
+    // had no route to a conversation the signed guardian consent says
+    // exists -- and a field nothing asserts is how that happens twice.
+    return getTodayRoute({
+      db: userScoped(providerA.token),
+      providerUserId: providerA.domainId,
+      now: NOW,
+    }).then((r) => {
+      if (!r.ok) throw new Error('route failed')
+      expect(r.route.stops.length).toBeGreaterThan(0)
+      for (const stop of r.route.stops) {
+        expect(stop.subscriptionId, stop.occurrenceId).toMatch(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+        )
+      }
+    })
+  })
+
   it('reports progress as work is completed', async () => {
     const before = await getTodayRoute({ db: userScoped(providerA.token), providerUserId: providerA.domainId, now: NOW })
     if (before.ok) expect(before.route.progress).toEqual({ done: 0, total: 3, complete: false })

@@ -53,6 +53,14 @@ type Db = SupabaseClient<Database>
 
 export type RouteStopView = {
   occurrenceId: string
+  /**
+   * The subscription this stop belongs to.
+   *
+   * Carried so the provider can open the message thread from the stop --
+   * threads are keyed by subscription, and without this the provider had no
+   * route to a conversation the guardian consent says exists.
+   */
+  subscriptionId: string
   state: OccurrenceState
   /** Position in the route, 1-based. */
   position: number
@@ -123,6 +131,7 @@ export async function getTodayRoute(args: {
       `id, state, service_date, local_timezone,
        service_window_start, service_window_end, service_value_cents,
        subscriptions!inner (
+         id,
          customer_instructions,
          service_details,
          customer_addresses!inner (
@@ -211,6 +220,7 @@ export async function getTodayRoute(args: {
 
     return {
       occurrenceId: r.id,
+      subscriptionId: (sub as { id?: string } | null)?.id ?? '',
       state: r.state as OccurrenceState,
       position: i + 1,
       serviceDate: r.service_date,

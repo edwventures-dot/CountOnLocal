@@ -596,3 +596,65 @@ input[type='range'].field__input {
   background: #991b1b;
   border-color: #991b1b;
 }
+
+/* ---------------------------------------------------------------------------
+   Message threads
+   ---------------------------------------------------------------------------
+   Deliberately plain. This exists so a customer can say "the side gate is
+   stuck" — it is not a chat product, and every affordance added to it is
+   another surface between an adult and a minor.
+*/
+
+.thread {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.thread__msg {
+  background: #f1f5f9;
+  border-radius: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  max-width: 42ch;
+}
+
+/* Your own messages sit right, which is the one chat convention worth
+   keeping: it answers "who said this" without reading the label. */
+.thread__msg--mine {
+  align-self: flex-end;
+  background: #e0e7ff;
+}
+
+.thread__body {
+  margin: 0 0 0.25rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.thread__meta {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.thread__report {
+  margin-top: 0.5rem;
+  border-top: 1px solid #cbd5e1;
+  padding-top: 0.5rem;
+}
+
+.disclosure {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--line, #e2e8f0);
+  padding-top: var(--space-3);
+}
+
+.disclosure > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9375rem;
+}

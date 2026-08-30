@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { authenticate } from '@/server/auth'
 import { RouteStopActions } from '@/components/RouteStop'
+import { MessageThread } from '@/components/MessageThread'
 import { SignOutButton } from '@/components/SignOutButton'
 import { Alert, Card, Shell, Stack } from '@/components/ui'
 
@@ -11,6 +12,7 @@ export const dynamic = 'force-dynamic'
 
 type Stop = {
   occurrenceId: string
+  subscriptionId: string
   position: number
   state: string
   window: { start: string | null; end: string | null }
@@ -242,6 +244,19 @@ export default async function TodayPage() {
                 ) : (
                   <RouteStopActions occurrenceId={stop.occurrenceId} />
                 )}
+
+                {/* The customer's side of this job. Collapsed, because a
+                    provider working a route wants the address and the gate
+                    code first -- but reachable, which it was not before. */}
+                {stop.subscriptionId ? (
+                  <details className="disclosure">
+                    <summary>Messages</summary>
+                    <MessageThread
+                      subscriptionId={stop.subscriptionId}
+                      counterpartyLabel="Customer"
+                    />
+                  </details>
+                ) : null}
               </Card>
             )
           })}
