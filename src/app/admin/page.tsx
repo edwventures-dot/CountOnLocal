@@ -9,6 +9,8 @@ import {
   PostureControl,
 } from '@/components/JurisdictionControls'
 import { listLiveRules } from '@/server/jurisdictionAdmin'
+import { listUndelivered } from '@/server/undeliveredMail'
+import { UndeliveredMail } from '@/components/UndeliveredMail'
 import { loadJurisdictionRules } from '@/server/jurisdictionService'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { SignOutButton } from '@/components/SignOutButton'
@@ -77,10 +79,11 @@ export default async function AdminPage() {
   // the posture setting and the catalog names are read here so the console
   // renders in one pass rather than three client fetches.
   const adminDb = supabaseAdmin()
-  const [liveRules, loaded, catalogResult] = await Promise.all([
+  const [liveRules, loaded, catalogResult, undelivered] = await Promise.all([
     listLiveRules(adminDb),
     loadJurisdictionRules(adminDb),
     adminDb.from('service_catalog').select('code, name').eq('active', true).order('name'),
+    listUndelivered(adminDb),
   ])
   const posture = loaded?.posture ?? 'allowlist'
   const catalog = catalogResult.data ?? []
@@ -190,6 +193,13 @@ export default async function AdminPage() {
             <PayoutHold />
           </Card>
         ) : null}
+
+        {/* The outbox has always had a 'dead' state meaning "a human
+            should look", and nowhere to look. */}
+        <Card>
+          <h2>Undelivered mail</h2>
+          <UndeliveredMail notices={undelivered} />
+        </Card>
 
         {/*
           Where the platform operates. Same permission as the rest of this

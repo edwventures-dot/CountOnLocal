@@ -91,6 +91,7 @@ export const AUDIT_ACTIONS = [
   'account.closed',
   'account.de_identified',
   'account.retired_dormant',
+  'mail.requeued',
   'jurisdiction.blocked',
   'jurisdiction.allowed',
   'jurisdiction.lifted',
