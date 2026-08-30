@@ -583,3 +583,16 @@ input[type='range'].field__input {
 .legal__footer p {
   margin: 0;
 }
+
+/* Closing an account. The one destructive control a person can reach, so
+   it does not look like the buttons that merely navigate. */
+.btn--danger {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: #fff;
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: #991b1b;
+  border-color: #991b1b;
+}

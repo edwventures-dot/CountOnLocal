@@ -82,6 +82,10 @@ export type AuditAction =
   | 'account.closed'
   | 'account.de_identified'
   | 'account.retired_dormant'
+  | 'jurisdiction.blocked'
+  | 'jurisdiction.allowed'
+  | 'jurisdiction.lifted'
+  | 'jurisdiction.posture_changed'
 
 /** Fields that must never appear in an audit snapshot. */
 const REDACTED_KEYS = new Set([

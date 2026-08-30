@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { authenticate } from '@/server/auth'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { SignOutButton } from '@/components/SignOutButton'
+import { CloseAccount } from '@/components/CloseAccount'
 import { Alert, Card, Shell, Stack } from '@/components/ui'
 
 export const metadata = { title: 'Your account | Count On Local' }
@@ -11,9 +12,11 @@ export const dynamic = 'force-dynamic'
 /**
  * Where signing in lands.
  *
- * Deliberately thin: it says who you are and what the next step is. The
- * dashboards it points at do not exist yet, and inventing a fake one here
- * would make the gap harder to see rather than easier.
+ * Says who you are, what you can do next, and how to leave.
+ *
+ * The comment here used to note that the dashboards it links to did not
+ * exist yet. They do now -- Today, the business page, the guardian view and
+ * subscriptions are all real -- and the note outlived the gap it described.
  */
 export default async function AccountPage() {
   const auth = await authenticate()
@@ -99,6 +102,14 @@ export default async function AccountPage() {
           <p className="small muted" style={{ marginBottom: 0 }}>
             There is no search yet. <Link href="/">The front page</Link> explains why.
           </p>
+        </Card>
+
+        {/* Last, because it is destructive and nobody should meet it on
+            the way to something else. The Privacy Notice tells people this
+            control is here, so it has to be. */}
+        <Card>
+          <h2>Closing your account</h2>
+          <CloseAccount />
         </Card>
       </Stack>
     </Shell>

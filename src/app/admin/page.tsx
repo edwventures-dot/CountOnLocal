@@ -3,6 +3,14 @@ import { headers } from 'next/headers'
 import { authenticate } from '@/server/auth'
 import { hasPermission } from '@/domain/roles'
 import { AccountAction, IssueRefund, PayoutHold, ResolveIncident } from '@/components/AdminControls'
+import {
+  AddJurisdictionRule,
+  LiveRules,
+  PostureControl,
+} from '@/components/JurisdictionControls'
+import { listLiveRules } from '@/server/jurisdictionAdmin'
+import { loadJurisdictionRules } from '@/server/jurisdictionService'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { SignOutButton } from '@/components/SignOutButton'
 import { RESPONSE_TARGET_MINUTES, type IncidentSeverity } from '@/domain/incident'
 import { Alert, Card, Shell, Stack } from '@/components/ui'
@@ -64,6 +72,18 @@ export default async function AdminPage() {
   const { items } = (await res.json()) as { items: QueueItem[] }
   const overdue = items.filter((i) => i.overdue)
   const canRelease = hasPermission(auth.auth.roles, 'payout:release')
+
+  // Read as the service role: jurisdiction_rules is readable by anyone, but
+  // the posture setting and the catalog names are read here so the console
+  // renders in one pass rather than three client fetches.
+  const adminDb = supabaseAdmin()
+  const [liveRules, loaded, catalogResult] = await Promise.all([
+    listLiveRules(adminDb),
+    loadJurisdictionRules(adminDb),
+    adminDb.from('service_catalog').select('code, name').eq('active', true).order('name'),
+  ])
+  const posture = loaded?.posture ?? 'allowlist'
+  const catalog = catalogResult.data ?? []
   const canHold = hasPermission(auth.auth.roles, 'payout:hold')
   const canRefund = hasPermission(auth.auth.roles, 'refund:issue')
   const canModerate =
@@ -170,6 +190,32 @@ export default async function AdminPage() {
             <PayoutHold />
           </Card>
         ) : null}
+
+        {/*
+          Where the platform operates. Same permission as the rest of this
+          console on purpose: a jurisdiction restriction exists because a
+          state's rules about minors working have not been satisfied, which
+          makes it a safety control rather than a billing setting.
+        */}
+        <Card>
+          <h2>Where we operate</h2>
+          <p className="muted small">
+            Counsel decides what goes here. Every rule needs a written reason and every change is
+            audited. Refusals happen before the address is geocoded, so a customer in a closed
+            state is told before they reach a card form.
+          </p>
+          <LiveRules rules={liveRules} />
+        </Card>
+
+        <Card>
+          <h2>Close or clear a state</h2>
+          <AddJurisdictionRule catalog={catalog} />
+        </Card>
+
+        <Card>
+          <h2>Launch posture</h2>
+          <PostureControl posture={posture} />
+        </Card>
 
         {canRelease ? (
           <Card>
