@@ -658,3 +658,96 @@ input[type='range'].field__input {
   font-weight: 600;
   font-size: 0.9375rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Reviews
+   --------------------------------------------------------------------------- */
+
+.stars {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: var(--space-3);
+}
+
+/* Big enough to hit with a thumb in a driveway. The provider reading the
+   result may be fourteen; the customer leaving it is standing outside. */
+.stars__star {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.75rem;
+  line-height: 1;
+  padding: 0.125rem 0.25rem;
+  color: #cbd5e1;
+}
+
+.stars__star--on {
+  color: #f59e0b;
+}
+
+.reviews {
+  margin: var(--space-4) 0;
+}
+
+.reviews__heading {
+  font-size: 1rem;
+  margin: 0 0 var(--space-3);
+}
+
+.reviews__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.reviews__item {
+  border-top: 1px solid #e2e8f0;
+  padding-top: var(--space-3);
+}
+
+.reviews__stars {
+  margin: 0 0 0.375rem;
+  color: #f59e0b;
+  letter-spacing: 0.05em;
+}
+
+.reviews__stars--off {
+  color: #cbd5e1;
+}
+
+.reviews__body {
+  margin: 0 0 0.5rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+/* Indented so a reply reads as an answer rather than a second review. */
+.reviews__response {
+  border-left: 3px solid #cbd5e1;
+  padding-left: 0.875rem;
+  margin: 0.5rem 0;
+}
+
+.reviews__response-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.review-form {
+  margin-top: var(--space-3);
+}
+
+.list__item--stacked {
+  display: block;
+}
+
+.list__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}

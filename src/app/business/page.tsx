@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { authenticate } from '@/server/auth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { RespondToReview } from '@/components/ReviewControls'
 import { getPublishReadiness } from '@/server/businessService'
 import { formatCents } from '@/domain/money'
 import {
@@ -79,7 +80,8 @@ export default async function BusinessPage() {
     )
   }
 
-  const [{ data: services }, { data: catalog }, readiness] = await Promise.all([
+  const [{ data: services }, { data: catalog }, readiness, { data: reviewRows }] =
+    await Promise.all([
     db
       .from('provider_services')
       .select('id, public_name, price_cents, price_unit, state')
@@ -91,7 +93,18 @@ export default async function BusinessPage() {
       .order('risk_tier')
       .order('name'),
     getPublishReadiness({ db, providerUserId: userId, businessId: business.id, now: new Date() }),
+    // Published only. A review a moderator hid is not something to invite a
+    // provider to argue with, and a removed one is gone.
+    db
+      .from('reviews')
+      .select('id, rating, body, response_body, created_at')
+      .eq('provider_user_id', userId)
+      .eq('state', 'published')
+      .order('created_at', { ascending: false })
+      .limit(25),
   ])
+
+  const reviews = reviewRows ?? []
 
   const blockers = readiness.ok ? readiness.blockers : []
   const areaByService = new Map(
@@ -152,6 +165,37 @@ export default async function BusinessPage() {
         <Card>
           <h2>{(services ?? []).length === 0 ? 'Add a service' : 'Add another'}</h2>
           <AddServiceForm businessId={business.id} catalog={catalog ?? []} />
+        </Card>
+
+        {/* Reviews, and the one reply each is allowed. A provider who can
+            read a review and not answer it is being shown a complaint with
+            the reply button removed. */}
+        <Card>
+          <h2>What customers said</h2>
+          {reviews.length === 0 ? (
+            <p className="muted" style={{ marginBottom: 0 }}>
+              Nothing yet. Reviews appear here once a customer writes one after a completed visit.
+            </p>
+          ) : (
+            <ul className="list">
+              {reviews.map((r) => (
+                <li key={r.id} className="list__item list__item--stacked">
+                  <p className="reviews__stars" aria-label={`${r.rating} out of 5`}>
+                    <span aria-hidden="true">{'★'.repeat(r.rating)}</span>
+                    <span aria-hidden="true" className="reviews__stars--off">
+                      {'★'.repeat(5 - r.rating)}
+                    </span>
+                  </p>
+                  {r.body ? <p className="small">{r.body}</p> : null}
+                  {r.response_body ? (
+                    <p className="small muted">You replied: {r.response_body}</p>
+                  ) : (
+                    <RespondToReview reviewId={r.id} />
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
 
         <Card>

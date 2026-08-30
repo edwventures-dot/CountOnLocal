@@ -9,6 +9,7 @@ import {
   SkipVisit,
 } from '@/components/SubscriptionControls'
 import { MessageThread } from '@/components/MessageThread'
+import { LeaveReview } from '@/components/ReviewControls'
 import { ReportProblem } from '@/components/ReportProblem'
 import { Alert, Card, Shell, Stack } from '@/components/ui'
 
@@ -215,11 +216,18 @@ export default async function SubscriptionsPage() {
             <h2>Recent visits</h2>
             <ul className="list">
               {data.history.map((h) => (
-                <li key={h.occurrenceId} className="list__item">
-                  <span>{h.serviceDate}</span>
-                  <span className="small muted">
-                    {h.state === 'credited' ? 'Credited' : 'Done'} · {money(h.valueCents)}
-                  </span>
+                <li key={h.occurrenceId} className="list__item list__item--stacked">
+                  <div className="list__row">
+                    <span>{h.serviceDate}</span>
+                    <span className="small muted">
+                      {h.state === 'credited' ? 'Credited' : 'Done'} · {money(h.valueCents)}
+                    </span>
+                  </div>
+                  {/* Only a delivered visit can be reviewed, and the server
+                      is what decides that -- offering the control on a
+                      credited visit would produce a refusal the customer
+                      cannot act on. */}
+                  {h.state !== 'credited' ? <LeaveReview occurrenceId={h.occurrenceId} /> : null}
                 </li>
               ))}
             </ul>

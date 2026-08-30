@@ -17,6 +17,7 @@ import { createClient } from '@supabase/supabase-js'
 import { publicEnv } from '@/lib/env'
 import { AddressCheck } from './AddressCheck'
 import { publicRating } from '@/domain/review'
+import { ReviewList, type PublicReview } from '@/components/ReviewList'
 import type { Database } from '@/lib/supabase/types'
 
 export const revalidate = 300
@@ -54,18 +55,48 @@ async function loadStorefront(slug: string) {
   const { data: reviewRows } = serviceIds.length
     ? await db
         .from('reviews')
-        .select('provider_service_id, rating')
+        // Bodies and replies too, not only the numbers. An aggregate score
+        // with no words behind it is a claim a reader cannot check, and
+        // the guardian consent describes reviews that "build a public
+        // reputation" rather than a hidden average.
+        .select('id, provider_service_id, rating, body, response_body, created_at')
         .in('provider_service_id', serviceIds)
-    : { data: [] as Array<{ provider_service_id: string; rating: number }> }
+        .order('created_at', { ascending: false })
+    : {
+        data: [] as Array<{
+          id: string
+          provider_service_id: string
+          rating: number
+          body: string | null
+          response_body: string | null
+          created_at: string
+        }>,
+      }
 
   const ratingsByService = new Map<string, number[]>()
+  const reviewsByService = new Map<string, PublicReview[]>()
   for (const r of reviewRows ?? []) {
     const list = ratingsByService.get(r.provider_service_id) ?? []
     list.push(r.rating)
     ratingsByService.set(r.provider_service_id, list)
+
+    // Only reviews that actually say something get rendered. A row with a
+    // star and no words is already counted in the average, and printing an
+    // empty quotation adds nothing.
+    if (r.body && r.body.trim()) {
+      const written = reviewsByService.get(r.provider_service_id) ?? []
+      written.push({
+        id: r.id,
+        rating: r.rating,
+        body: r.body,
+        responseBody: r.response_body,
+        createdAt: r.created_at,
+      })
+      reviewsByService.set(r.provider_service_id, written)
+    }
   }
 
-  return { business, services: services ?? [], ratingsByService }
+  return { business, services: services ?? [], ratingsByService, reviewsByService }
 }
 
 /** Integer cents to a display string. Formatting happens only here. */
@@ -132,7 +163,7 @@ export default async function Storefront({ params }: Params) {
   // answer publicly. A paused page should not announce that it is paused.
   if (!data) notFound()
 
-  const { business, services, ratingsByService } = data
+  const { business, services, ratingsByService, reviewsByService } = data
 
   return (
     <main style={S.page}>
@@ -208,6 +239,14 @@ export default async function Storefront({ params }: Params) {
                 </div>
 
                 {cadence ? <p style={S.cadence}>{cadence}</p> : null}
+
+                {/* Shown only once the aggregate is allowed to show. Below
+                    the threshold the individual reviews would reconstruct
+                    the score PRD 19 deliberately withholds from a named
+                    minor's page. */}
+                {rating.visible ? (
+                  <ReviewList reviews={reviewsByService.get(s.id) ?? []} />
+                ) : null}
 
                 <AddressCheck providerServiceId={s.id} />
                 <p style={S.fineprint}>
