@@ -751,3 +751,74 @@ input[type='range'].field__input {
   justify-content: space-between;
   gap: var(--space-3);
 }
+
+/* ---------------------------------------------------------------------------
+   Share and growth
+   --------------------------------------------------------------------------- */
+
+.copylink {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+/* Shown in full, not hidden behind the button: a provider is often reading
+   this aloud or typing it into somebody else's phone. */
+.copylink__url {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  background: #f1f5f9;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.qr {
+  display: block;
+  width: 200px;
+  height: 200px;
+  /* White behind it always. A QR on a tinted card can fall below the
+     contrast a camera needs, and a code that will not scan is worse than
+     no code because nobody finds out until they are on a doorstep. */
+  background: #fff;
+  padding: 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  margin-bottom: var(--space-3);
+}
+
+.meter {
+  height: 0.5rem;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 0 0 var(--space-3);
+}
+
+.meter__fill {
+  height: 100%;
+  background: var(--col-green, #4d7c0f);
+  border-radius: 999px;
+}
+
+.stats {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin: var(--space-3) 0 0;
+}
+
+.stats dt {
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.stats dd {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+}

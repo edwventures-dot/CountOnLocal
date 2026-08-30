@@ -167,6 +167,19 @@ export default async function BusinessPage() {
           <AddServiceForm businessId={business.id} catalog={catalog ?? []} />
         </Card>
 
+        {/* The share tools live on their own page rather than here: a
+            provider comes to this page to change what they offer and to
+            /grow to go and find customers. */}
+        <Card>
+          <h2>Share your page</h2>
+          <p className="muted" style={{ marginBottom: 'var(--space-3)' }}>
+            Your link, your QR code, and printable flyers.
+          </p>
+          <Link className="btn btn--secondary" href="/grow">
+            Get more customers
+          </Link>
+        </Card>
+
         {/* Reviews, and the one reply each is allowed. A provider who can
             read a review and not answer it is being shown a complaint with
             the reply button removed. */}

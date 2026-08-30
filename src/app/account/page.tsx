@@ -63,6 +63,9 @@ export default async function AccountPage() {
               <Link className="btn btn--secondary" href="/business">
                 Your service page
               </Link>
+              <Link className="btn btn--secondary" href="/grow">
+                Get more customers
+              </Link>
             </div>
           </Card>
         ) : (
