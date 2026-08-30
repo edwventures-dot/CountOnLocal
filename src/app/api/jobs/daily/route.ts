@@ -58,7 +58,7 @@
  */
 
 import { timingSafeEqual } from 'node:crypto'
-import { extendHorizon, promoteDueToday } from '@/server/occurrenceJobs'
+import { extendHorizon, promoteDueToday, remindUpcoming } from '@/server/occurrenceJobs'
 import { runSettlement } from '@/server/settlementService'
 import { runReferralRewards } from '@/server/referralService'
 import { runAgeOut } from '@/server/agingJob'
@@ -76,6 +76,7 @@ export const maxDuration = 300
 type JobName =
   | 'extend-horizon'
   | 'due-today'
+  | 'remind-upcoming'
   | 'settle'
   | 'pay-out'
   | 'age-out'
@@ -86,6 +87,7 @@ type JobName =
 const JOBS: readonly JobName[] = [
   'extend-horizon',
   'due-today',
+  'remind-upcoming',
   'settle',
   'pay-out',
   'age-out',
@@ -152,6 +154,13 @@ export async function GET(request: Request): Promise<Response> {
 
   await run('extend-horizon', () => extendHorizon({ db, now }))
   await run('due-today', () => promoteDueToday({ db, now }))
+  // After promotion, so today's work has already left the 'scheduled'
+  // state and cannot be reminded about as if it were tomorrow's. Before
+  // notify, so the reminder goes out in this pass rather than sitting in
+  // the outbox for a day -- which for a next-day reminder would mean
+  // arriving on the morning of the visit.
+  await run('remind-upcoming', () => remindUpcoming({ db, now }))
+
   await run('settle', () => runSettlement({ db, now }))
   // After settlement, because qualifying reads the ledger for whether the
   // cycle was actually charged. Running it first would leave every referral

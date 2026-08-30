@@ -19,6 +19,7 @@ import {
   civilDateIn,
   extendHorizon,
   promoteDueToday,
+  remindUpcoming,
   cancelFutureOccurrences,
 } from '@/server/occurrenceJobs'
 import { isoDate } from '@/domain/schedule'
@@ -130,7 +131,7 @@ async function makeSubscription(serviceId: string): Promise<string> {
 async function occurrencesFor(subId: string) {
   const { data } = await admin
     .from('service_occurrences')
-    .select('service_date, state, local_timezone')
+    .select('id, service_date, state, local_timezone')
     .eq('subscription_id', subId)
     .order('service_date')
   return data ?? []
@@ -261,6 +262,67 @@ describe('extending the horizon', () => {
     expect((await occurrencesFor(honoluluSubId)).length).toBe(before)
 
     await admin.from('subscriptions').update({ state: 'active' }).eq('id', honoluluSubId)
+  })
+})
+
+describe('reminding the day before, in the customer own day', () => {
+  // Both routes run on Tuesdays, and the first Tuesday is 2026-09-01.
+  //
+  // At 07:00 UTC on Monday the 31st it is already Monday in Chicago -- so
+  // Tuesday is tomorrow and the reminder is due -- while in Honolulu it is
+  // still Sunday evening, so that same visit is two days out and a
+  // reminder would be wrong. A single UTC comparison cannot tell those
+  // apart, which is the entire reason this groups by zone.
+  const MONDAY_IN_CHICAGO = new Date('2026-08-31T07:00:00Z')
+  // Fifteen hours later. Honolulu has reached Monday; Chicago is still on
+  // it. 13:00Z would have been Tuesday in both, which is the mistake the
+  // first draft of this made.
+  const MONDAY_IN_HONOLULU = new Date('2026-08-31T22:00:00Z')
+
+  /** Reminder rows for one subscription's occurrences, by service date. */
+  const remindedDates = async (subId: string) => {
+    const occs = await occurrencesFor(subId)
+    const byId = new Map(occs.map((o) => [o.id, o.service_date]))
+    const { data } = await admin
+      .from('notifications')
+      .select('payload')
+      .eq('kind', 'occurrence.upcoming')
+    return (data ?? [])
+      .map((n) => byId.get((n.payload as { occurrenceId?: string }).occurrenceId ?? ''))
+      .filter((d): d is string => Boolean(d))
+      .sort()
+  }
+
+  it('reminds Chicago about tomorrow while Honolulu is still two days out', async () => {
+    const r = await remindUpcoming({ db: admin, now: MONDAY_IN_CHICAGO })
+    expect(r.failures).toEqual([])
+
+    expect(await remindedDates(chicagoSubId)).toEqual(['2026-09-01'])
+    expect(await remindedDates(honoluluSubId)).toEqual([])
+  })
+
+  it('reminds Honolulu once its own Monday arrives', async () => {
+    await remindUpcoming({ db: admin, now: MONDAY_IN_HONOLULU })
+    expect(await remindedDates(honoluluSubId)).toEqual(['2026-09-01'])
+  })
+
+  it('reminds once, however often the job runs', async () => {
+    await remindUpcoming({ db: admin, now: MONDAY_IN_CHICAGO })
+    await remindUpcoming({ db: admin, now: MONDAY_IN_CHICAGO })
+
+    // Still one per subscription after three runs over the same day.
+    expect(await remindedDates(chicagoSubId)).toEqual(['2026-09-01'])
+  })
+
+  it('says nothing about the address or who is coming', async () => {
+    const { data } = await admin
+      .from('notifications')
+      .select('preview')
+      .eq('kind', 'occurrence.upcoming')
+      .limit(1)
+
+    expect(data![0]!.preview).toMatch(/tomorrow/i)
+    expect(data![0]!.preview).not.toMatch(/oak|street|[0-9]{5}|gate|code/i)
   })
 })
 

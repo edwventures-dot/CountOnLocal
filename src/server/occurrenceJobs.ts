@@ -28,6 +28,7 @@ import {
   type ScheduleRule,
 } from '@/domain/schedule'
 import { parseScheduleRule } from '@/server/checkoutService'
+import { enqueueNotification } from '@/server/notifications'
 import { parseServiceDate } from '@/server/occurrenceService'
 import type { PlainDate } from '@/domain/age'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -40,6 +41,16 @@ type Db = SupabaseClient<Database>
  * sits in the middle, leaving room to run late without the horizon closing.
  */
 export const HORIZON_WEEKS = 10
+
+/**
+ * PostgREST returns an embedded to-one as an object or a one-element array
+ * depending on how it inferred the relationship. Normalised here rather
+ * than at each call site, the same way routeService does it.
+ */
+function one<T>(value: T | T[] | null | undefined): T | undefined {
+  if (Array.isArray(value)) return value[0]
+  return value ?? undefined
+}
 
 /** The civil date in `timeZone` at `instant`. */
 export function civilDateIn(timeZone: string, instant: Date): PlainDate {
@@ -220,6 +231,133 @@ export async function promoteDueToday(args: { db: Db; now: Date }): Promise<Prom
     }
 
     result.promoted += (updated ?? []).length
+  }
+
+  return result
+}
+
+export type RemindResult = {
+  zonesConsidered: number
+  reminded: number
+  failures: Array<{ timezone: string; reason: string }>
+}
+
+/**
+ * "Your visit is tomorrow."
+ *
+ * PRD section 20 asks for occurrence.upcoming and nothing sent it. The
+ * reminder matters most for the services where the customer has to do
+ * something first -- keep the dog in, move the car off the drive, leave the
+ * side gate unlocked -- and for the one where they might otherwise do the
+ * job themselves before the provider arrives.
+ *
+ * ## Tomorrow in whose day?
+ *
+ * The same question promoteDueToday answers, and answered the same way:
+ * grouped by IANA zone, with the civil date computed per zone. "Tomorrow"
+ * at 11:00 UTC is a different date in Honolulu and in Boston, and a single
+ * UTC comparison would send some customers a reminder for a visit two days
+ * out and others one for a visit that already happened.
+ *
+ * Adding a day to the CIVIL date rather than to the instant is what makes
+ * this survive daylight saving: the day after 1 November is 2 November
+ * whether that day is 23, 24 or 25 hours long.
+ *
+ * ## Once, ever
+ *
+ * Keyed on the occurrence, so a run that fails halfway and repeats does not
+ * send a second reminder, and a job that runs twice in a day sends nothing
+ * the second time.
+ *
+ * Only 'scheduled' work is reminded about. Something already promoted,
+ * completed, skipped or cancelled either happened or will not, and neither
+ * needs a note about tomorrow.
+ */
+export async function remindUpcoming(args: { db: Db; now: Date }): Promise<RemindResult> {
+  const { db, now } = args
+  const result: RemindResult = { zonesConsidered: 0, reminded: 0, failures: [] }
+
+  const { data: zoneRows, error } = await db
+    .from('service_occurrences')
+    .select('local_timezone')
+    .eq('state', 'scheduled')
+
+  if (error) {
+    result.failures.push({ timezone: '*', reason: `query failed: ${error.message}` })
+    return result
+  }
+
+  const zones = [...new Set((zoneRows ?? []).map((r) => r.local_timezone))]
+
+  for (const tz of zones) {
+    result.zonesConsidered++
+
+    let tomorrowIso: string
+    try {
+      const today = civilDateIn(tz, now)
+      tomorrowIso = isoDate(addDays(today, 1))
+    } catch {
+      // An unrecognised zone must not stall every other zone's reminders.
+      result.failures.push({ timezone: tz, reason: 'unrecognised time zone' })
+      continue
+    }
+
+    const { data: due, error: dueError } = await db
+      .from('service_occurrences')
+      .select(
+        `id, service_date,
+         subscriptions!inner (
+           customer_user_id,
+           provider_services!inner ( public_name )
+         )`,
+      )
+      .eq('state', 'scheduled')
+      .eq('local_timezone', tz)
+      .eq('service_date', tomorrowIso)
+      .limit(500)
+
+    if (dueError) {
+      result.failures.push({ timezone: tz, reason: dueError.message })
+      continue
+    }
+
+    for (const row of due ?? []) {
+      const sub = one<{ customer_user_id: string; provider_services: unknown }>(
+        row.subscriptions as never,
+      )
+      if (!sub) continue
+      const service = one<{ public_name: string }>(sub.provider_services as never)
+
+      const { data: user } = await db
+        .from('users')
+        .select('email')
+        .eq('id', sub.customer_user_id)
+        .maybeSingle()
+
+      if (!user?.email) continue
+
+      const queued = await enqueueNotification({
+        db,
+        recipientUserId: sub.customer_user_id,
+        now,
+        idempotencyKey: `upcoming:${row.id}`,
+        draft: {
+          kind: 'occurrence.upcoming',
+          channel: 'email',
+          destination: user.email,
+          subject: 'Your visit is tomorrow',
+          // The service name is the provider's own public wording and is
+          // safe on a lock screen. Nothing about the address, the access
+          // code, or who is coming.
+          preview: service?.public_name
+            ? `${service.public_name} is scheduled for tomorrow.`
+            : 'You have a visit scheduled for tomorrow.',
+          payload: { occurrenceId: row.id },
+        },
+      })
+
+      if (queued) result.reminded += 1
+    }
   }
 
   return result

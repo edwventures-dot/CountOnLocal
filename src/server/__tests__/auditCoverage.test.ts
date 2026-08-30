@@ -92,7 +92,6 @@ const NOTIFICATION_NOT_YET_WIRED: Readonly<Record<string, string>> = {
   'guardian.revoked': 'revocation is immediate and visible in both dashboards',
   'business.published': 'the provider is looking at the page when it happens',
   'subscription.canceled': 'the customer cancels it themselves and sees the result',
-  'occurrence.upcoming': 'no reminder job exists; PRD 20 asks for one',
   'occurrence.completed': 'the customer sees it on their dashboard',
   'occurrence.credited': 'shown as a credit against the next cycle',
   'safety.alert': 'incidents are worked from the console, not pushed',
@@ -159,6 +158,13 @@ describe('notification kinds', () => {
   it('does not excuse a kind that is in fact sent', () => {
     const stale = Object.keys(NOTIFICATION_NOT_YET_WIRED).filter((k) => enqueuedKinds.has(k))
     expect(stale).toEqual([])
+  })
+
+  it('reminds a customer the day before a visit', () => {
+    // PRD 20 asks for this and nothing sent it. The reminder matters most
+    // where the customer has to do something first -- keep the dog in,
+    // move the car, leave the gate unlocked.
+    expect(enqueuedKinds.has('occurrence.upcoming')).toBe(true)
   })
 
   it('tells a provider when they gain a customer or a review', () => {
