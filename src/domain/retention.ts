@@ -43,6 +43,13 @@
  * row those ids point at stops naming a person. Claiming a sweep exists
  * for it would be describing work no code does.
  *
+ * That only holds if the account row itself expires, which is what
+ * `account_identity` below is for. Without it the seven-year periods on
+ * those classes were numbers nothing acted on: an account nobody ever
+ * closed kept them tied to a named person indefinitely. The product owner
+ * caught exactly this on 2026-08-30, and the fix was a clock on the
+ * account rather than softer wording.
+ *
  * ## Why deletion mostly means de-identification
  *
  * A person asking to be forgotten cannot take the money with them. The
@@ -69,6 +76,7 @@
  */
 
 export type RetentionClass =
+  | 'account_identity'
   | 'message_ordinary'
   | 'message_flagged'
   | 'completion_photo'
@@ -137,6 +145,36 @@ export const CHARGEBACK_WINDOW_DAYS = 120
 export const LONG_RETENTION_DAYS = YEAR * 7
 
 export const RETENTION: Readonly<Record<RetentionClass, RetentionRule>> = {
+  /**
+   * The account row itself: email, phone, display name.
+   *
+   * This is the entry that makes the whole table honest. The ledger, the
+   * audit log, incidents and account actions carry no names -- only user
+   * ids -- so they stop being personal data when THIS expires. Without a
+   * clock here their seven-year periods were numbers nothing acted on,
+   * which the product owner correctly called out on 2026-08-30.
+   *
+   * The clock runs from the last sign of real activity, not from signup.
+   * While somebody is using the platform there is no retention question to
+   * answer -- holding a customer's email is the relationship, not a record
+   * of one. The clock starts when the relationship ends: at closure if
+   * they say so, and at dormancy if they simply stop coming back.
+   *
+   * Seven years of complete silence, matching the financial period so
+   * there is one number to argue about rather than two. Deliberately
+   * conservative: the owner's instruction is to prefer defensible
+   * retention over aggressive deletion, and an account retired too early
+   * cannot be given back.
+   */
+  account_identity: {
+    days: LONG_RETENTION_DAYS,
+    atExpiry: 'de_identify',
+    onRequest: 'erase',
+    mechanism: 'own_columns',
+    clock: 'the last sign of activity on the account, or closure',
+    reason:
+      'Contact details and display names. Held while the account is in use, because that is the relationship rather than a record of one, and cleared once it has plainly ended.',
+  },
   message_ordinary: {
     days: YEAR,
     atExpiry: 'de_identify',
@@ -254,6 +292,20 @@ export function sweptClasses(): RetentionClass[] {
   const classes = Object.keys(RETENTION) as RetentionClass[]
   return classes.filter((c) => RETENTION[c].mechanism === 'own_columns')
 }
+
+/**
+ * How long before an account expires it is warned.
+ *
+ * The same thirty days the aging-out job gives a provider turning 18, for
+ * the same reason: the alternative is somebody discovering a decision
+ * about their account by finding it already made.
+ *
+ * A dormant account is by definition one that has not read its mail in
+ * years, so most of these warnings go unread. They are sent anyway --
+ * "they probably would not have noticed" is not a reason to act without
+ * telling somebody.
+ */
+export const DORMANCY_WARNING_DAYS = 30
 
 /** Nothing is kept forever. Asserted rather than hoped for. */
 export function hasFiniteRetention(rule: RetentionRule): boolean {

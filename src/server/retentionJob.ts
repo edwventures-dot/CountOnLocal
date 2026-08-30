@@ -42,11 +42,14 @@
 import {
   cutoffFor,
   deletionEffect,
+  DORMANCY_WARNING_DAYS,
   REDACTED,
   RETENTION,
   tombstoneEmail,
   type RetentionClass,
 } from '@/domain/retention'
+import { enqueueNotification } from '@/server/notifications'
+import { providerBalanceCents } from '@/domain/ledger'
 import { purgeExpiredMessages } from '@/server/messageService'
 import { writeAudit } from '@/server/audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -71,6 +74,14 @@ export type RetentionRunResult = {
   expired: Partial<Record<RetentionClass, number>>
   /** Closed accounts de-identified this run. */
   accountsDeIdentified: number
+  /** Dormant accounts warned that they are about to be retired. */
+  dormancyWarnings: number
+  /**
+   * Dormant accounts that could not be retired because money is owed or a
+   * subscription is still live. Reported rather than skipped silently: a
+   * number that never falls to zero is somebody's money sitting unclaimed.
+   */
+  dormantBlocked: number
   failures: Array<{ step: string; message: string }>
 }
 
@@ -78,6 +89,8 @@ export async function runRetention(args: { db: Db; now: Date }): Promise<Retenti
   const result: RetentionRunResult = {
     expired: {},
     accountsDeIdentified: 0,
+    dormancyWarnings: 0,
+    dormantBlocked: 0,
     failures: [],
   }
 
@@ -115,11 +128,138 @@ export async function runRetention(args: { db: Db; now: Date }): Promise<Retenti
     result.expired.consent_record = await expireConsentRecords(args)
   })
 
+  await step('dormant_accounts', async () => {
+    const dormant = await expireDormantAccounts(args)
+    result.expired.account_identity = dormant.retired
+    result.dormancyWarnings = dormant.warned
+    result.dormantBlocked = dormant.blocked
+  })
+
+  // After the dormancy pass, so an account retired this run is finished in
+  // the same run rather than waiting for tomorrow.
   await step('close_out_accounts', async () => {
     result.accountsDeIdentified = await deIdentifyClosedAccounts(args)
   })
 
   return result
+}
+
+/**
+ * Accounts nobody has touched in years.
+ *
+ * The clock comes from account_retention_clock (migration 0039), which
+ * counts real activity only -- notifications the platform sent are
+ * excluded, or an automated reminder would keep an abandoned account alive
+ * forever.
+ *
+ * Two passes, in this order:
+ *
+ *   1. warn anything due to expire within DORMANCY_WARNING_DAYS, while
+ *      the email address still exists to warn it at;
+ *   2. retire anything already past its date.
+ *
+ * Both refusals from closeAccount apply here and matter more, because
+ * nobody asked for this. An account owed money is left alone and counted,
+ * so unclaimed earnings surface as a number somebody can act on rather
+ * than as an account quietly emptied of the details needed to pay it.
+ */
+async function expireDormantAccounts(args: {
+  db: Db
+  now: Date
+}): Promise<{ warned: number; retired: number; blocked: number }> {
+  const rule = RETENTION.account_identity
+  const cutoff = cutoffFor({ rule, now: args.now })
+  const warnCutoff = new Date(cutoff.getTime() + DORMANCY_WARNING_DAYS * 86_400_000)
+
+  const { data, error } = await args.db
+    .from('account_retention_clock')
+    .select('user_id, last_active_at, has_live_subscription, closed_at, de_identified_at')
+    .is('de_identified_at', null)
+    .lt('last_active_at', warnCutoff.toISOString())
+    .limit(BATCH)
+
+  if (error) throw new Error(error.message)
+
+  let warned = 0
+  let retired = 0
+  let blocked = 0
+
+  for (const row of data ?? []) {
+    const lastActive = new Date(row.last_active_at as string)
+    const due = lastActive < cutoff
+
+    if (row.has_live_subscription) {
+      // Live subscription means the account is not dormant at all -- the
+      // clock is measuring the wrong thing for this person. Left alone.
+      blocked += 1
+      continue
+    }
+
+    const owed = await amountOwed(args.db, row.user_id as string)
+    if (owed > 0) {
+      blocked += 1
+      continue
+    }
+
+    if (!due) {
+      if (await warnOfDormancy({ db: args.db, userId: row.user_id as string, now: args.now })) {
+        warned += 1
+      }
+      continue
+    }
+
+    await args.db
+      .from('users')
+      .update({ status: 'closed', closed_at: args.now.toISOString() })
+      .eq('id', row.user_id as string)
+      .is('closed_at', null)
+
+    await writeAudit({
+      actorUserId: null,
+      actorRole: 'system',
+      action: 'account.retired_dormant',
+      targetType: 'user',
+      targetId: row.user_id as string,
+      reasonCode: 'dormant',
+      // No deletion_requested_at: nobody asked. The distinction matters if
+      // somebody later asks why their account is gone.
+      after: { last_active_at: row.last_active_at, after_days: rule.days },
+    })
+
+    await deIdentifyAccount({ db: args.db, userId: row.user_id as string, now: args.now })
+    retired += 1
+  }
+
+  return { warned, retired, blocked }
+}
+
+/** Tells somebody their account is about to be retired. Once. */
+async function warnOfDormancy(args: { db: Db; userId: string; now: Date }): Promise<boolean> {
+  const { data: user } = await args.db
+    .from('users')
+    .select('email')
+    .eq('id', args.userId)
+    .maybeSingle()
+
+  if (!user?.email) return false
+
+  const sent = await enqueueNotification({
+    db: args.db,
+    recipientUserId: args.userId,
+    now: args.now,
+    // Keyed on the account, not the date, so the daily run does not send
+    // this every day for the thirty days it is inside the window.
+    idempotencyKey: `dormancy_warning:${args.userId}`,
+    draft: {
+      kind: 'account.dormancy_warning',
+      channel: 'email',
+      destination: user.email,
+      subject: 'Your Count On Local account is about to close',
+      preview: `We have not seen any activity for a long time, so this account will close in ${DORMANCY_WARNING_DAYS} days. Sign in to keep it.`,
+      payload: { warningDays: DORMANCY_WARNING_DAYS },
+    },
+  })
+  return Boolean(sent)
 }
 
 /**
@@ -457,7 +597,6 @@ async function amountOwed(db: Db, userId: string): Promise<number> {
     .select('kind, amount_cents')
     .eq('provider_user_id', userId)
 
-  const { providerBalanceCents } = await import('@/domain/ledger')
   return providerBalanceCents(
     (data ?? []).map((e) => ({
       kind: e.kind,

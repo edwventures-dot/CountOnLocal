@@ -10,7 +10,7 @@ import {
   renderText,
   type ConsentDocument,
 } from '../consent'
-import { checkPriceCap, MAX_CYCLE_TOTAL_CENTS } from '../money'
+import { checkPriceCap, MAX_OCCURRENCE_PRICE_CENTS } from '../money'
 
 const ALL = Object.values(CONSENT_DOCUMENTS)
 
@@ -177,28 +177,42 @@ describe('the typed signature', () => {
 })
 
 describe('the price cap', () => {
-  it('caps the cycle total, not the listed price', () => {
-    // $20/week on a 4-week cycle bills $80 in one go. Capping the price at
-    // $50 would leave that legal, and the exposure per dispute is the
-    // charge, not the price.
-    const r = checkPriceCap({ priceCents: 2000, priceUnit: 'week', billingCycleWeeks: 4 })
-    expect(r.ok).toBe(false)
-    expect(r.cycleTotalCents).toBe(8000)
+  it('caps one visit, not the cycle total', () => {
+    // Corrected by the product owner on 2026-08-30: "a $35 weekly
+    // lawn-mowing service should be valid. Four completed weekly visits
+    // may legitimately total $140 in one billing cycle."
+    const r = checkPriceCap({ priceCents: 3500, priceUnit: 'week', billingCycleWeeks: 4 })
+    expect(r.ok).toBe(true)
+    // The cycle total is still reported, because a provider pricing at $35
+    // needs to see that the customer is billed $140.
+    expect(r.cycleTotalCents).toBe(14_000)
   })
 
-  it('allows the same price on a shorter cycle', () => {
-    expect(checkPriceCap({ priceCents: 2000, priceUnit: 'week', billingCycleWeeks: 2 }).ok).toBe(
-      true,
-    )
+  it('does not care how long the cycle is', () => {
+    // The old rule made the same price legal or illegal depending on the
+    // cycle length. Nothing about a visit changes because it is billed
+    // fortnightly instead of monthly.
+    for (const weeks of [1, 2, 4, 8]) {
+      expect(
+        checkPriceCap({ priceCents: 3500, priceUnit: 'week', billingCycleWeeks: weeks }).ok,
+        `${weeks} weeks`,
+      ).toBe(true)
+    }
   })
 
   it('allows exactly the cap', () => {
-    const r = checkPriceCap({ priceCents: 1250, priceUnit: 'week', billingCycleWeeks: 4 })
-    expect(r).toEqual({ ok: true, cycleTotalCents: MAX_CYCLE_TOTAL_CENTS })
+    const r = checkPriceCap({ priceCents: MAX_OCCURRENCE_PRICE_CENTS, priceUnit: 'visit', billingCycleWeeks: 4 })
+    expect(r.ok).toBe(true)
   })
 
   it('refuses a cent over', () => {
-    expect(checkPriceCap({ priceCents: 5001, priceUnit: 'visit', billingCycleWeeks: 4 }).ok).toBe(
+    expect(
+      checkPriceCap({ priceCents: MAX_OCCURRENCE_PRICE_CENTS + 1, priceUnit: 'visit', billingCycleWeeks: 4 }).ok,
+    ).toBe(false)
+  })
+
+  it('refuses a single visit over the cap however short the cycle', () => {
+    expect(checkPriceCap({ priceCents: 5001, priceUnit: 'week', billingCycleWeeks: 1 }).ok).toBe(
       false,
     )
   })
@@ -208,10 +222,12 @@ describe('the price cap', () => {
     expect(r.ok).toBe(false)
   })
 
-  it('tells the provider what price would fit', () => {
-    const r = checkPriceCap({ priceCents: 2000, priceUnit: 'week', billingCycleWeeks: 4 })
-    // $50 over 4 weeks is $12.50 a week.
-    if (!r.ok) expect(r.message).toContain('$12.50')
+  it('names the cap in terms of a single visit', () => {
+    const r = checkPriceCap({ priceCents: 9000, priceUnit: 'week', billingCycleWeeks: 4 })
+    if (!r.ok) {
+      expect(r.message).toContain('$50.00')
+      expect(r.message).toContain('single visit')
+    }
   })
 
   it('counts per-visit and monthly as one occurrence', () => {

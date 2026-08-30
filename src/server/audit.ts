@@ -81,6 +81,7 @@ export type AuditAction =
   | 'payout.sent'
   | 'account.closed'
   | 'account.de_identified'
+  | 'account.retired_dormant'
 
 /** Fields that must never appear in an audit snapshot. */
 const REDACTED_KEYS = new Set([

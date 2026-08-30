@@ -174,11 +174,18 @@ path is covered by integration tests against a stubbed processor.
   that checkable rather than asserted.
 - The customer pays a platform fee on top: **15% with a $1.00 minimum per
   cycle**, held as configuration.
-- **Maximum $50 per service per billing cycle.** Note this caps the cycle
-  total, not the listed price — a $20/week service on a 4-week cycle
-  would bill $80 and is refused. The practical effect is that a weekly
-  service on a 4-week cycle is limited to **$12.50/week**. If that is too
-  low for yard work, the cap or the cycle length has to change.
+- **Maximum $50 per single visit.** Corrected 2026-08-30 on the product
+  owner's instruction: the cap is an anti-abuse guardrail on one service
+  occurrence, not on the cycle total. A $35/week lawn service is valid and
+  bills $140 on a four-week cycle.
+  - The earlier rule capped the cycle total, which limited a weekly
+    service to $12.50/week. That is not a real price for yard work.
+  - **What this gives up:** the size of a single charge is no longer
+    bounded at $50. A $50/week service on a four-week cycle bills $200 at
+    once, and the exposure in a dispute is the charge, not the price. The
+    owner made that trade knowingly.
+  - Both the provider (when setting the price) and the customer (at
+    checkout) are shown the cycle total, not just the per-visit price.
 - Cards are handled entirely by Stripe. **We never see or store a card
   number** — Stripe.js runs in an iframe on Stripe's domain.
 - Refunds are issued in-app and cannot exceed what was actually charged;
@@ -245,6 +252,7 @@ codebase decides how long anything is kept.
 
 | What | Kept for | Clock starts | Then |
 |---|---|---|---|
+| Account contact details | 7 years | **last activity**, or closure | replaced |
 | Ordinary messages | 1 year | message sent | body replaced |
 | Reported/blocked messages | 3 years | message sent | body replaced |
 | Completion photos | 180 days | the visit | file and row deleted |
@@ -313,18 +321,44 @@ code cannot drift apart. **The product must never tell somebody their data
 is gone while retaining seven years of it**, and this is the mechanism
 that prevents it.
 
-### 3.3 De-identification, honestly
+### 3.3 De-identification, honestly — reconciled 2026-08-30
 
 For the ledger, the audit log, incidents and account actions there is **no
 separate erasure sweep, and there could not be** — nothing in those rows
 names anybody. They carry a user id and a fact. They stop being personal
-data the moment the account row those ids point at stops naming a person,
-which happens at closure.
+data the moment the account row those ids point at stops naming a person.
 
-This is worth stating precisely because it is easy to write a policy
-promising a sweep that no code performs. Every class is marked in the
-policy as either genuinely swept or covered by the account row, and a test
-fails if a class is listed as swept and nothing touches it.
+The product owner correctly identified the gap in that: it happens at
+closure, and **if nobody ever closes the account it never happens**. A
+seven-year period that nothing acts on is not a retention period, and the
+claim that nothing is retained indefinitely was not true as written.
+
+**Fixed by putting a clock on the account itself**, rather than by
+softening the wording:
+
+- `account_identity` is now a retention class in its own right. Contact
+  details and display names are held while the account is in use — that is
+  the relationship, not a record of one — and cleared once it has plainly
+  ended.
+- The clock runs from **the last sign of real activity**: the account row
+  changing, a subscription moving, money being credited, a consent signed.
+  Notifications the platform *sent* are deliberately excluded, or an
+  automated reminder would keep an abandoned account alive forever.
+- After **seven years of complete silence** the account is closed and
+  de-identified automatically. Matching the financial period so there is
+  one number to argue about rather than two.
+- **Warned thirty days ahead**, by email, once — not once a day for a
+  month. Most of these will go unread by definition; they are sent anyway.
+- The same two refusals apply, and matter more because nobody asked:
+  an account owed money or holding a live subscription is left alone and
+  **counted in the job's output**, so unclaimed earnings surface as a
+  number somebody can act on rather than as an account quietly emptied of
+  the details needed to pay it.
+
+Every class is marked in the policy as either genuinely swept or covered
+by the account row, and tests fail if a class is listed as swept and
+nothing touches it, or if a via-account class would outlive the account
+row it depends on.
 
 ### 3.4 A minor's data on closure
 
@@ -351,13 +385,79 @@ Same as anyone's, with two specifics:
   account accepted a specific document, itemized, on a specific date — but
   not the name that account typed. Seven years is a proposal.
 
-### 3.5 What is still an open question
+### 3.5 Stripe costs, and who absorbs them
+
+Answering the owner's question of 2026-08-30. **This is not a request to
+change the customer fee, and nothing here changes it.**
+
+**The platform absorbs every Stripe cost.** The customer is charged
+subtotal + platform fee; the provider is transferred 100% of their listed
+price; Stripe deducts its processing fee from the platform's balance.
+Nothing is passed on to either side, and nothing reduces what a provider
+is paid.
+
+Worked through at both ends of the range, using standard US card pricing
+(2.9% + $0.30) — the actual rates come from the Stripe agreement and
+should be confirmed against it:
+
+| Cycle | Charged | Our fee | Stripe takes | We net |
+|---|---|---|---|---|
+| $35/wk × 4 | $161.00 | $21.00 | ~$4.97 | ~$16.03 |
+| $12 cycle | $13.80 | $1.80 | ~$0.70 | ~$1.10 |
+| $3 cycle (fee minimum applies) | $4.00 | $1.00 | ~$0.42 | ~$0.58 |
+
+Per transaction the economics hold at every price point, including where
+the $1.00 minimum binds.
+
+**Two things that are not per-transaction, and are not covered by this:**
+
+1. **Connect account costs.** Stripe charges the platform per active
+   connected account per month, plus a percentage of payout volume. A
+   provider with one $3/month customer generates well under that in fees.
+   This is a per-account cost against per-transaction revenue, and it is
+   the number that decides whether very small providers are viable.
+2. **Disputes.** A chargeback carries a fixed fee that exceeds our entire
+   margin on any cycle in the table above.
+
+**A real gap, worth knowing before anyone reads a revenue number:** the
+ledger records `platform_fee` as gross and **has no entry for Stripe's
+cut**. There is no `processor_fee` kind. The money is correct — Stripe
+deducts from the platform balance and the provider is paid in full — but
+the books say we earned $21.00 on that first row when we netted about
+$16.03, and nothing in the product shows true margin.
+
+That is a reporting gap rather than a money bug, and it is a deliberate
+statement rather than a discovery left in a comment: a `processor_fee`
+ledger kind reconciled against Stripe's balance transactions would close
+it, and that has not been built.
+
+### 3.6 What is still an open question
+
+These map to the counsel items in the owner's response of 2026-08-30:
 
 - Whether seven years is right, especially for money held for minors.
+- **Whether seven years of dormancy is the right trigger for retiring an
+  account.** It is new, and it is the one period here that acts on somebody
+  who has not asked for anything. Deliberately conservative, per the
+  owner's instruction to prefer defensible retention over aggressive
+  deletion — an account retired too early cannot be given back.
 - Whether any applicable deletion right overrides the two refusals in 3.2.
 - Whether a minor reaching 18 should be able to request erasure of records
   created while they were 13–17 on different terms from an adult's. The
   aging-out path exists; no special deletion right is built for it.
+
+Outside retention, still open from the same response:
+
+- **Guardian identity verification.** The owner has approved adding
+  friction wherever counsel determines it is legally required. Nothing is
+  built beyond an authenticated session, and §1.3 above still stands:
+  consent-time identity must not be described as verified.
+- **A successful real Stripe transfer** has still not been exercised. See
+  §1.4 — the refusal path was verified live; the success path is covered
+  only by integration tests against a stubbed processor. Completing Stripe
+  Express onboarding requires entering bank and identity details in a
+  browser, which the owner needs to do; the verification script is ready
+  to run against it afterwards.
 
 ---
 

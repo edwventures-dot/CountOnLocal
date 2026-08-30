@@ -45,6 +45,9 @@ export const NOTIFICATION_KINDS = [
   'payout.sent',
   'review.received',
   'safety.alert',
+  // Not from PRD 20. Added with the dormancy sweep (migration 0039): an
+  // account about to be retired for inactivity is warned first.
+  'account.dormancy_warning',
 ] as const
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]

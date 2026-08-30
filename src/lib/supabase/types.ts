@@ -918,6 +918,24 @@ export type Database = {
        * subscription's state can forget to maintain it. Forgetting once
        * would keep a home address indefinitely, silently.
        */
+      /**
+       * Migration 0039. Last sign of real activity per account, for the
+       * dormancy sweep that gives account_identity a terminal date.
+       *
+       * Excludes notifications the platform sent: mail leaving is the
+       * platform being active, not the person.
+       */
+      account_retention_clock: {
+        Row: {
+          user_id: string
+          status: string
+          closed_at: string | null
+          de_identified_at: string | null
+          last_active_at: string
+          has_live_subscription: boolean
+        }
+        Relationships: []
+      }
       address_retention_clock: {
         Row: {
           address_id: string

@@ -91,6 +91,25 @@ describe('what a deletion request actually does', () => {
     expect(swept.length).toBeGreaterThan(0)
   })
 
+  it('gives the account row itself a finite clock', () => {
+    // Without this the seven-year periods on the ledger, audit log,
+    // incidents and account actions are numbers nothing acts on: an
+    // account nobody ever closes keeps them tied to a named person
+    // forever. The product owner caught exactly this on 2026-08-30.
+    expect(RETENTION.account_identity.mechanism).toBe('own_columns')
+    expect(RETENTION.account_identity.days).toBeGreaterThan(0)
+    expect(sweptClasses()).toContain('account_identity')
+  })
+
+  it('expires the account row no later than the records that depend on it', () => {
+    // A via_account class outliving account_identity would be retention
+    // the policy claims and the code cannot deliver.
+    for (const c of ALL) {
+      if (RETENTION[c].mechanism !== 'via_account') continue
+      expect(RETENTION.account_identity.days, c).toBeLessThanOrEqual(RETENTION[c].days)
+    }
+  })
+
   it('does not claim a sweep for records that only hold a user id', () => {
     // Nothing in a ledger entry names anybody. Listing it as swept would
     // describe work no code does.

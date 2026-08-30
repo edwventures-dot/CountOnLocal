@@ -129,29 +129,38 @@ export function formatCents(cents: number, currency = 'USD'): string {
 }
 
 /**
- * The most a single service may bill in one cycle.
+ * The most a single visit may be priced at.
  *
- * From the owner's legal/safety pass: "$50 max per service, per cycle."
- * The purpose is stated there too -- it keeps every dispute trivial and
- * blocks using the platform to move real money ("no $1,000 jobs").
+ * From the owner's legal/safety pass -- "$50 max per service" -- as
+ * corrected by the product owner's response of 2026-08-30, which is
+ * explicit that this is a guardrail on ONE service occurrence and not on
+ * the total billed in a cycle:
  *
- * ## This caps the CYCLE TOTAL, not the listed price
+ *   "a $35 weekly lawn-mowing service should be valid. Four completed
+ *    weekly visits may legitimately total $140 in one billing cycle."
  *
- * Those are different numbers and the difference is large. A $20/week
- * service billed every 4 weeks charges $80 in one go. Capping the listed
- * price at $50 would leave that $80 charge legal, and the exposure per
- * dispute is the charge, not the price -- so the cap has to sit on what
- * actually gets billed.
+ * ## This caps the listed price, which IS the occurrence price
  *
- * The consequence, which is worth knowing before this ships: on a 4-week
- * cycle a weekly service is limited to $12.50/week. If that is too low for
- * yard work, the answer is to raise the cap or shorten the cycle, not to
- * move the cap onto the listed price.
+ * Worth stating because the first implementation capped the cycle total
+ * and the two look interchangeable until you check. A price is quoted per
+ * week, per visit, or per month, and only 'week' produces more than one
+ * occurrence in a cycle -- so in every case the listed price is what one
+ * visit costs. Capping it is therefore exactly the rule above, with no
+ * arithmetic in between.
+ *
+ * ## What this gives up, deliberately
+ *
+ * The earlier cycle-total rule bounded the size of a single CHARGE, and
+ * the exposure in a dispute is the charge rather than the price. Under
+ * this rule a $50/week service on a four-week cycle bills $200 at once.
+ * The owner made that trade knowingly: capping the cycle total limited a
+ * weekly service to $12.50/week, which is not a real price for yard work,
+ * and an unusable product is a worse outcome than a larger dispute.
  *
  * Configuration, never a constant read at the call site -- same rule as the
  * platform fee.
  */
-export const MAX_CYCLE_TOTAL_CENTS = 5_000
+export const MAX_OCCURRENCE_PRICE_CENTS = 5_000
 
 export type PriceCapCheck =
   | { ok: true; cycleTotalCents: number }
@@ -160,9 +169,11 @@ export type PriceCapCheck =
 /**
  * Whether a service may be priced this way.
  *
- * Uses the same occurrence arithmetic as quoteCycle rather than repeating
- * it, so a change to how cycles are counted cannot leave the cap checking
- * a different number from the one the customer is charged.
+ * The cap is on one visit. The cycle total is still computed and returned
+ * -- using the same occurrence arithmetic as quoteCycle rather than
+ * repeating it -- because the provider needs to be shown what a customer
+ * will actually be billed, which under this rule can be several times the
+ * listed price and should never be a surprise.
  */
 export function checkPriceCap(args: {
   priceCents: number
@@ -170,20 +181,18 @@ export function checkPriceCap(args: {
   billingCycleWeeks: number
   maxCents?: number
 }): PriceCapCheck {
-  const maxCents = args.maxCents ?? MAX_CYCLE_TOTAL_CENTS
+  const maxCents = args.maxCents ?? MAX_OCCURRENCE_PRICE_CENTS
   const occurrences = args.priceUnit === 'week' ? args.billingCycleWeeks : 1
   const cycleTotalCents = args.priceCents * occurrences
 
-  if (cycleTotalCents <= maxCents) return { ok: true, cycleTotalCents }
+  if (args.priceCents <= maxCents) return { ok: true, cycleTotalCents }
 
-  const perUnit = Math.floor(maxCents / occurrences)
   return {
     ok: false,
     cycleTotalCents,
     maxCents,
-    message:
-      occurrences === 1
-        ? `The most a service can charge in one cycle is ${formatCents(maxCents)}.`
-        : `That works out to ${formatCents(cycleTotalCents)} every ${args.billingCycleWeeks} weeks, and the most a service can charge in one cycle is ${formatCents(maxCents)}. Try ${formatCents(perUnit)} or less per ${args.priceUnit}.`,
+    // Names the unit the provider typed, so the number in the message is
+    // the number in the field they have to change.
+    message: `The most a single ${args.priceUnit === 'week' ? 'visit' : args.priceUnit} can be priced at is ${formatCents(maxCents)}.`,
   }
 }

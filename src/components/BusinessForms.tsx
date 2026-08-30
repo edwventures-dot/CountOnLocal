@@ -14,7 +14,17 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Alert, Field } from '@/components/ui'
 import { DEFAULT_RADIUS_METRES, describeRadius } from '@/domain/serviceArea'
-import { formatCents, MAX_CYCLE_TOTAL_CENTS } from '@/domain/money'
+import { formatCents, MAX_OCCURRENCE_PRICE_CENTS } from '@/domain/money'
+
+/**
+ * The billing cycle this form creates services on.
+ *
+ * Named rather than repeated as a bare 4, because it appears twice -- in
+ * what is submitted and in what the provider is told they will be charging
+ * -- and those two disagreeing is how a provider ends up surprised by
+ * their own price.
+ */
+const WEEKS_PER_CYCLE = 4
 
 type CatalogEntry = {
   code: string
@@ -139,6 +149,12 @@ export function AddServiceForm({
 
   const chosen = catalog.find((c) => c.code === code)
 
+  // The cap moved from the cycle total to a single visit on 2026-08-30, so
+  // a customer is now billed several times the listed price in one go.
+  // A provider typing "35" is setting up a $140 charge, and finding that
+  // out from a customer's complaint would be a bad way to learn it.
+  const perCycleCents = Math.round(Number(price) * 100) * WEEKS_PER_CYCLE
+
   return (
     <form
       className="stack"
@@ -151,7 +167,7 @@ export function AddServiceForm({
           description,
           priceCents: Math.round(Number(price) * 100),
           priceUnit: 'week',
-          billingCycleWeeks: 4,
+          billingCycleWeeks: WEEKS_PER_CYCLE,
           scheduleRule: { frequency: 'weekly', weekdays: [weekday], timezone: 'America/Chicago' },
           capacityRule: { maxAddresses: Math.round(Number(capacity)) },
         })
@@ -215,7 +231,11 @@ export function AddServiceForm({
         type="number"
         step="0.50"
         min="0.50"
-        hint={`You keep all of this. Customers pay a small platform fee on top. The most any service can bill in one cycle is ${formatCents(MAX_CYCLE_TOTAL_CENTS)}, which over ${'4'} weeks is ${formatCents(MAX_CYCLE_TOTAL_CENTS / 4)} a week.`}
+        hint={
+          Number.isFinite(perCycleCents) && perCycleCents > 0
+            ? `You keep all of this. The most one visit can be priced at is ${formatCents(MAX_OCCURRENCE_PRICE_CENTS)}. Billed every ${WEEKS_PER_CYCLE} weeks, so a customer is charged ${formatCents(perCycleCents)} at a time, plus a small platform fee.`
+            : `You keep all of this. The most one visit can be priced at is ${formatCents(MAX_OCCURRENCE_PRICE_CENTS)}.`
+        }
         required
         value={price}
         onChange={(e) => setPrice(e.target.value)}

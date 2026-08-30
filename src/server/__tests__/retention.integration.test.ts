@@ -14,6 +14,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import pg from 'pg'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { closeAccount, runRetention } from '@/server/retentionJob'
@@ -104,8 +105,49 @@ beforeAll(async () => {
   if (notifyError) throw new Error(notifyError.message)
 })
 
+/**
+ * Removes consent records written by a test.
+ *
+ * The table refuses DELETE from every role including the one the
+ * application runs as, which is the whole point of it -- so the only way
+ * to clear a fixture is with database ownership, briefly disabling the
+ * trigger. That is exactly the limit already documented for counsel:
+ * "somebody with database ownership could drop the trigger; that is an
+ * access-control and backup problem, not one a schema can solve."
+ *
+ * Without this the test leaks. consent_records references users with
+ * `on delete restrict`, so an undeleted consent row silently keeps its
+ * signer and subject alive too -- which is how fourteen abandoned accounts
+ * accumulated in the development database before anybody looked.
+ */
+async function dropConsentFixtures(userIds: string[]): Promise<void> {
+  const url = process.env['DATABASE_URL']
+  if (!url || userIds.length === 0) return
+
+  const client = new pg.Client({ connectionString: url })
+  await client.connect()
+  try {
+    await client.query('begin')
+    await client.query('alter table consent_records disable trigger consent_records_no_delete')
+    await client.query(
+      `delete from consent_records
+        where signer_user_id = any($1::uuid[]) or subject_user_id = any($1::uuid[])`,
+      [userIds],
+    )
+    await client.query('alter table consent_records enable trigger consent_records_no_delete')
+    await client.query('commit')
+  } catch {
+    await client.query('rollback').catch(() => {})
+  } finally {
+    await client.end()
+  }
+}
+
 afterAll(async () => {
-  for (const id of [customerId, providerId, guardianId].filter(Boolean)) {
+  const ids = [customerId, providerId, guardianId].filter(Boolean)
+  await dropConsentFixtures(ids)
+
+  for (const id of ids) {
     await admin.from('notifications').delete().eq('recipient_user_id', id)
     await admin.from('customer_addresses').delete().eq('customer_user_id', id)
     await admin.from('guardian_relationships').delete().eq('provider_user_id', id)
@@ -378,7 +420,9 @@ describe('signatures past their retention period', () => {
     expect(data!.document_hash).toBe('a'.repeat(64))
     expect(data!.acknowledged_items).toEqual(['earnings'])
 
-    await admin.from('consent_records').delete().eq('id', consent!.id).then(() => {})
+    // No cleanup here: the table refuses DELETE, and pretending otherwise
+    // is what made this test leak. afterAll removes it the only way anyone
+    // can. See dropConsentFixtures.
   })
 
   it('leaves a signature inside its period alone', async () => {
@@ -413,5 +457,153 @@ describe('signatures past their retention period', () => {
     // check. If the policy is shortened and the trigger is not, the sweep
     // silently stops redacting and nothing fails.
     expect(RETENTION.consent_record.days).toBe(365 * 7)
+  })
+})
+
+/**
+ * Dormant accounts.
+ *
+ * The reconciliation the product owner asked for on 2026-08-30: the ledger,
+ * audit log, incidents and account actions carry only user ids, so their
+ * retention periods mean nothing unless the account row they point at
+ * eventually stops naming a person. This is the sweep that makes it happen
+ * when nobody ever closes the account.
+ *
+ * Note the sweep is global -- it visits every account in the database --
+ * so every assertion here is about a specific user rather than about the
+ * run's counters.
+ */
+describe('accounts nobody has touched in years', () => {
+  let dormantId = ''
+  let owedId = ''
+  let warnableId = ''
+
+  const backdate = async (id: string, days: number) => {
+    // No trigger maintains users.updated_at, so this is how the view sees
+    // an account as untouched. created_at too, or greatest() picks it up.
+    const when = daysAgo(days)
+    await admin.from('users').update({ created_at: when, updated_at: when } as never).eq('id', id)
+  }
+
+  beforeAll(async () => {
+    dormantId = await makeUser('dormant')
+    owedId = await makeUser('owed')
+    warnableId = await makeUser('warnable')
+
+    await backdate(dormantId, 8 * 365)
+    await backdate(owedId, 8 * 365)
+    // Inside the thirty-day warning window: older than the warning
+    // threshold, younger than the cutoff itself. Getting this the wrong
+    // side of the line retires the account instead of warning it, which is
+    // what the first draft of this test did.
+    await backdate(warnableId, 7 * 365 - 10)
+
+    await admin.from('ledger_entries').insert({
+      kind: 'provider_earning',
+      amount_cents: -1500,
+      currency: 'USD',
+      provider_user_id: owedId,
+      memo: 'unclaimed earnings',
+      created_at: daysAgo(8 * 365),
+    } as never)
+    // The ledger row is itself activity, so put the clock back afterwards.
+    await backdate(owedId, 8 * 365)
+  })
+
+  afterAll(async () => {
+    for (const id of [dormantId, owedId, warnableId].filter(Boolean)) {
+      await admin.from('ledger_entries').delete().eq('provider_user_id', id)
+      await admin.from('notifications').delete().eq('recipient_user_id', id)
+      await admin.from('audit_log').delete().eq('target_id', id)
+      const { data: u } = await admin
+        .from('users')
+        .select('auth_user_id')
+        .eq('id', id)
+        .maybeSingle()
+      await admin.from('users').delete().eq('id', id)
+      if (u?.auth_user_id) await admin.auth.admin.deleteUser(u.auth_user_id).catch(() => {})
+    }
+  })
+
+  it('retires an account silent for eight years', async () => {
+    const result = await runRetention({ db: admin, now: new Date() })
+    expect(result.failures).toEqual([])
+
+    const { data } = await admin
+      .from('users')
+      .select('status, email, closed_at, de_identified_at, deletion_requested_at')
+      .eq('id', dormantId)
+      .single()
+
+    expect(data!.status).toBe('closed')
+    expect(data!.email?.endsWith('.invalid')).toBe(true)
+    expect(data!.de_identified_at).toBeTruthy()
+    // Nobody asked. The distinction matters if they later ask why their
+    // account is gone.
+    expect(data!.deletion_requested_at).toBeNull()
+  })
+
+  it('records that it was inactivity, not a request', async () => {
+    const { data } = await admin
+      .from('audit_log')
+      .select('action, reason_code')
+      .eq('target_id', dormantId)
+      .eq('action', 'account.retired_dormant')
+
+    expect((data ?? []).length).toBe(1)
+    expect(data![0]!.reason_code).toBe('dormant')
+  })
+
+  it('will not retire an account that is still owed money', async () => {
+    // Unclaimed earnings must not be quietly emptied of the details needed
+    // to pay them.
+    const { data } = await admin
+      .from('users')
+      .select('status, de_identified_at')
+      .eq('id', owedId)
+      .single()
+
+    expect(data!.status).toBe('active')
+    expect(data!.de_identified_at).toBeNull()
+  })
+
+  it('warns before the date rather than after', async () => {
+    const { data } = await admin
+      .from('notifications')
+      .select('kind, subject')
+      .eq('recipient_user_id', warnableId)
+
+    expect((data ?? []).map((n) => n.kind)).toContain('account.dormancy_warning')
+
+    // Still active. A warning is not the action.
+    const { data: user } = await admin
+      .from('users')
+      .select('status')
+      .eq('id', warnableId)
+      .single()
+    expect(user!.status).toBe('active')
+  })
+
+  it('warns once, not once a day for thirty days', async () => {
+    await runRetention({ db: admin, now: new Date() })
+
+    const { count } = await admin
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('recipient_user_id', warnableId)
+      .eq('kind', 'account.dormancy_warning')
+
+    expect(count).toBe(1)
+  })
+
+  it('leaves a recently active account alone', async () => {
+    const { data } = await admin
+      .from('users')
+      .select('status, de_identified_at')
+      .eq('id', providerId)
+      .single()
+
+    expect(data!.status).not.toBe('closed')
+    expect(data!.de_identified_at).toBeNull()
   })
 })
