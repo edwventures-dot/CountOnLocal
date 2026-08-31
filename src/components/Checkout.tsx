@@ -60,6 +60,8 @@ type Stage =
       subscriptionId: string
       clientSecret: string
       totalCents: number
+      /** Shown on the card screen so somebody can check before paying. */
+      addressLabel: string
       /** A card was already collected on an earlier, unfinished attempt. */
       alreadyCollected?: boolean
       paymentMethodRef?: string
@@ -273,6 +275,7 @@ export function Checkout({
         subscriptionId,
         clientSecret: setupBody.clientSecret,
         totalCents,
+        addressLabel: stage.name === 'review' ? stage.preview.normalizedAddress : '',
         ...(setupBody.nextStage === 'charge'
           ? { alreadyCollected: true, paymentMethodRef: setupBody.paymentMethodRef }
           : {}),
@@ -304,6 +307,8 @@ export function Checkout({
         subscriptionId={stage.subscriptionId}
         clientSecret={stage.clientSecret}
         totalCents={stage.totalCents}
+        addressLabel={stage.addressLabel}
+        onBack={() => setStage({ name: 'address' })}
         {...(stage.alreadyCollected ? { alreadyCollected: true } : {})}
         {...(stage.paymentMethodRef ? { savedPaymentMethodRef: stage.paymentMethodRef } : {})}
         onDone={(chargedCents) => setStage({ name: 'done', chargedCents })}
@@ -634,13 +639,18 @@ function PayStep({
   subscriptionId,
   clientSecret,
   totalCents,
+  addressLabel,
   alreadyCollected,
   savedPaymentMethodRef,
+  onBack,
   onDone,
 }: {
   subscriptionId: string
   clientSecret: string
   totalCents: number
+  /** What is being bought, so it can be checked before paying. */
+  addressLabel: string
+  onBack: () => void
   /** A card was collected on an earlier attempt that did not finish. */
   alreadyCollected?: boolean
   savedPaymentMethodRef?: string
@@ -760,6 +770,20 @@ function PayStep({
   return (
     <div className="stack">
       {error ? <Alert kind="error">{error}</Alert> : null}
+
+      {/* What is actually being bought.
+          This screen used to show a price and a Pay button and nothing
+          else: no address, no dates, and no way back. Somebody unsure
+          whether they had the right address could neither check nor
+          return, and the only move left was to abandon and start again. */}
+      {addressLabel ? (
+        <p className="small" style={{ marginBottom: 0 }}>
+          <span className="muted">Going to:</span> <strong>{addressLabel}</strong>{' '}
+          <button className="btn btn--link" type="button" onClick={onBack} disabled={busy}>
+            Change
+          </button>
+        </p>
+      ) : null}
 
       <p className="muted" style={{ marginBottom: 0 }}>
         {money(totalCents)} today, then the same every cycle until you pause or cancel.
