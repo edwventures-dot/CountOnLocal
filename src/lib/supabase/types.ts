@@ -401,6 +401,8 @@ export type Database = {
           geocoded_at: string | null
           geocoder: string | null
           access_notes: string | null
+          /** Migration 0041. The raw entry, when it differed from verified. */
+          typed_address: string | null
           /**
            * geography(Point, 4326). Readable over PostgREST as hex WKB,
            * but NOT writable through it -- setting it needs
@@ -423,6 +425,7 @@ export type Database = {
           geocoded_at?: string | null
           geocoder?: string | null
           access_notes?: string | null
+          typed_address?: string | null
           /** Accepted by Postgres; needed to backdate rows in retention tests. */
           created_at?: string
         }

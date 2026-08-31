@@ -43,6 +43,15 @@ const INSIDE = {
 }
 const OUTSIDE = { ...INSIDE, line1: '900 Outside Ave', postalCode: '78702' }
 
+/**
+ * The same house with a postcode from another city.
+ *
+ * 77429 is Cypress, about 165 miles from Austin. The geocoder corrects it
+ * and returns an Austin point, which is exactly the case that made the
+ * stored record disagree with reality.
+ */
+const WRONG_ZIP = { ...INSIDE, line1: '250 Corrected Way', postalCode: '77429' }
+
 function stub(): StubGeocoder {
   const m = new Map<string, GeocodeResult>()
   m.set(StubGeocoder.keyFor(INSIDE), {
@@ -50,6 +59,14 @@ function stub(): StubGeocoder {
     latitude: 30.275,
     longitude: -97.7425,
     normalizedAddress: '100 INSIDE ST, AUSTIN, TX, 78701',
+    provider: 'stub',
+  })
+  m.set(StubGeocoder.keyFor(WRONG_ZIP), {
+    ok: true,
+    latitude: 30.275,
+    longitude: -97.7425,
+    // Corrected to the real Austin postcode, as the Census does.
+    normalizedAddress: '250 CORRECTED WAY, AUSTIN, TX, 78701',
     provider: 'stub',
   })
   m.set(StubGeocoder.keyFor(OUTSIDE), {
@@ -436,6 +453,73 @@ describe('an unpublished service cannot be subscribed to', () => {
       .from('businesses')
       .update({ state: 'published' })
       .eq('slug', `checkout-test-${stamp}`)
+  })
+})
+
+describe('an address the geocoder corrects', () => {
+  // The fixture caps at two addresses and the tests above have used them.
+  // Raised here only, so an AT_CAPACITY refusal cannot be mistaken for the
+  // address handling being wrong.
+  beforeAll(async () => {
+    await admin
+      .from('provider_services')
+      .update({ capacity_rule: { maxAddresses: 30 } })
+      .eq('id', serviceId)
+  })
+
+  afterAll(async () => {
+    await admin
+      .from('provider_services')
+      .update({ capacity_rule: { maxAddresses: 2 } })
+      .eq('id', serviceId)
+  })
+
+  it('stores what was verified, not what was typed', async () => {
+    // Found by a tester entering ZIP 77429 for an Austin house. The
+    // geocoder read it as 78701 -- Cypress is 165 miles from Austin -- and
+    // returned a point in Austin, so eligibility passed while the record
+    // said the wrong city. Staff lookups, address dedupe and the density
+    // analytics all read these columns.
+    const r = await createSubscription({
+      db: admin,
+      customerUserId: secondCustomerId,
+      input: {
+        providerServiceId: serviceId,
+        address: WRONG_ZIP,
+        attestation: {
+          acknowledgedItems: [
+            'is_adult',
+            'no_background_checks',
+            'provider_may_be_minor',
+            'accurate_address_and_dog',
+            'messaging',
+            'not_emergency_service',
+          ],
+          typedName: 'Test Customer',
+        },
+      },
+      now: NOW,
+    })
+    if (!r.ok) throw new Error(`subscribe failed: ${r.code}`)
+
+    const { data: sub } = await admin
+      .from('subscriptions')
+      .select('service_address_id')
+      .eq('id', r.subscriptionId)
+      .single()
+
+    const { data: addr } = await admin
+      .from('customer_addresses')
+      .select('postal_code, normalized_address, typed_address')
+      .eq('id', sub!.service_address_id)
+      .single()
+
+    // The stored postcode is the geocoder's, not the one that was typed.
+    expect(addr!.postal_code).not.toBe('77429')
+    expect(addr!.normalized_address).toContain(addr!.postal_code)
+    // And the entry survives, so a dispute can tell a bad geocode from a
+    // bad entry.
+    expect(addr!.typed_address).toContain('77429')
   })
 })
 

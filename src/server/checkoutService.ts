@@ -23,6 +23,7 @@ import {
 } from '@/domain/schedule'
 import { parsePlainDate, type PlainDate } from '@/domain/age'
 import { resolveTimeZone } from '@/domain/jurisdiction'
+import { differsMaterially, parseNormalisedAddress } from '@/domain/normalisedAddress'
 import { canAcceptNewSubscription } from '@/domain/gates'
 import { loadProviderGateContext } from '@/server/providerGate'
 import type { Role } from '@/domain/roles'
@@ -414,6 +415,35 @@ export async function createSubscription(args: {
     return { ok: false, code: 'INVALID_START_DATE' }
   }
 
+  // What actually gets stored: the geocoder's reading of the address when
+  // it produced one we can parse, and the customer's own entry when it did
+  // not. Parsing refuses anything it does not recognise rather than
+  // guessing, so an unfamiliar format falls back rather than putting a city
+  // name in a postcode column.
+  const verified = parseNormalisedAddress(preview.preview.normalizedAddress)
+  const stored = verified ?? {
+    line1: input.address.line1.trim(),
+    city: input.address.city.trim(),
+    region: input.address.region,
+    postalCode: input.address.postalCode,
+  }
+
+  // Only recorded when it differs from what was stored -- otherwise every
+  // address carries a duplicate of itself.
+  const typedAddress =
+    verified &&
+    differsMaterially(
+      {
+        line1: input.address.line1,
+        city: input.address.city,
+        region: input.address.region,
+        postalCode: input.address.postalCode,
+      },
+      verified,
+    )
+      ? `${input.address.line1}, ${input.address.city}, ${input.address.region}, ${input.address.postalCode}`
+      : null
+
   // Reuse an address this customer already has, rather than inserting a new
   // row for the same house. Inserting unconditionally defeated the unique
   // index that prevents duplicate subscriptions, so a second Subscribe click
@@ -422,27 +452,34 @@ export async function createSubscription(args: {
     .from('customer_addresses')
     .select('id')
     .eq('customer_user_id', customerUserId)
-    .ilike('line1', input.address.line1.trim())
-    .ilike('city', input.address.city.trim())
-    .eq('region', input.address.region)
-    .like('postal_code', `${input.address.postalCode.slice(0, 5)}%`)
+    .ilike('line1', stored.line1)
+    .ilike('city', stored.city)
+    .eq('region', stored.region)
+    .like('postal_code', `${stored.postalCode.slice(0, 5)}%`)
     .maybeSingle()
 
-  // The address is stored with what the geocoder returned, so a later
-  // dispute can tell "we geocoded it wrong" from "they typed it wrong".
   const inserted = existingAddress
     ? { data: existingAddress, error: null }
     : await db
     .from('customer_addresses')
     .insert({
       customer_user_id: customerUserId,
-      line1: input.address.line1,
+      // The verified address, not the typed one. A tester entering ZIP
+      // 77429 for an Austin house had it read as 78701 -- a different city
+      // 165 miles away -- and the record kept saying Cypress. Staff
+      // lookups, address deduplication and the density analytics all read
+      // these columns.
+      line1: stored.line1,
       line2: input.address.line2 ?? null,
-      city: input.address.city,
-      region: input.address.region,
-      postal_code: input.address.postalCode,
+      city: stored.city,
+      region: stored.region,
+      postal_code: stored.postalCode,
       country_code: input.address.countryCode,
       normalized_address: preview.preview.normalizedAddress,
+      // What they actually typed, so a dispute can tell a bad geocode from
+      // a bad entry. That was the stated intent here and it had never been
+      // implemented.
+      typed_address: typedAddress,
       geocoded_at: now.toISOString(),
       geocoder: 'us_census',
     })
