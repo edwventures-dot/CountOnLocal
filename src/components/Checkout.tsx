@@ -31,6 +31,7 @@ import { Alert, Field } from '@/components/ui'
 import { CUSTOMER_ATTESTATION } from '@/domain/consent'
 import { BITE_HISTORY, DOG_SIZES } from '@/domain/serviceDetails'
 import { SlowNotice, Spinner } from '@/components/SlowNotice'
+import { takeAddress, type HandoffAddress } from '@/lib/addressHandoff'
 
 type Preview = {
   business: { name: string; slug: string }
@@ -102,6 +103,14 @@ export function Checkout({
   const router = useRouter()
   const [stage, setStage] = useState<Stage>({ name: 'address' })
   const [error, setError] = useState<string | null>(null)
+  /**
+   * Which field the server rejected.
+   *
+   * The message these routes return is "Check the highlighted fields", and
+   * nothing was highlighted -- a four-digit ZIP looks exactly like a
+   * five-digit one when the form points at nothing.
+   */
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
 
   const [line1, setLine1] = useState('')
@@ -116,6 +125,38 @@ export function Checkout({
   const [dogBite, setDogBite] = useState<string>('')
   const [acknowledged, setAcknowledged] = useState<string[]>([])
   const [typedName, setTypedName] = useState('')
+
+  /**
+   * Picks up an address already checked on the storefront.
+   *
+   * Runs once. The check is re-run against the server rather than trusted
+   * -- the storefront's answer came from an unauthenticated endpoint and a
+   * service area can change between the two pages -- but the customer does
+   * not have to type it again to make that happen.
+   */
+  const handedOff = useRef(false)
+  useEffect(() => {
+    if (handedOff.current) return
+    handedOff.current = true
+
+    const carried = takeAddress(serviceId)
+    if (!carried) return
+
+    setLine1(carried.line1)
+    setCity(carried.city)
+    setRegion(carried.region)
+    setPostalCode(carried.postalCode)
+    setPrefilled(carried)
+  }, [serviceId])
+
+  // Set by the effect above; the submit below runs once it lands, because
+  // the state setters have not applied yet at that point.
+  const [prefilled, setPrefilled] = useState<HandoffAddress | null>(null)
+  useEffect(() => {
+    if (!prefilled) return
+    setPrefilled(null)
+    void checkAddressWith(prefilled)
+  }, [prefilled])
 
   // The preview says which service this is; dog fields only appear for a
   // service that involves one.
@@ -141,18 +182,33 @@ export function Checkout({
 
   async function checkAddress(e: React.FormEvent) {
     e.preventDefault()
+    await checkAddressWith(address)
+  }
+
+  /**
+   * The check itself, separated from the form event so an address carried
+   * over from the storefront can run it without a click.
+   */
+  async function checkAddressWith(candidate: {
+    line1: string
+    city: string
+    region: string
+    postalCode: string
+  }) {
     setError(null)
+    setFieldErrors({})
     setBusy(true)
     try {
       const { ok, body } = await post('/api/v1/checkout/preview', {
         providerServiceId: serviceId,
-        address,
+        address: { ...candidate, countryCode: 'US' },
       })
       if (!ok) {
-        setError(
-          (body as { error?: { message?: string } }).error?.message ??
-            'We could not check that address.',
-        )
+        const err = (body as {
+          error?: { message?: string; fieldErrors?: Record<string, string> }
+        }).error
+        setError(err?.message ?? 'We could not check that address.')
+        setFieldErrors(err?.fieldErrors ?? {})
         return
       }
       setStage({ name: 'review', preview: body as unknown as Preview })
@@ -490,6 +546,7 @@ export function Checkout({
       <Field
         label="Street address"
         name="line1"
+        {...(fieldErrors['line1'] ? { error: fieldErrors['line1'] } : {})}
         autoComplete="address-line1"
         required
         value={line1}
@@ -498,6 +555,7 @@ export function Checkout({
       <Field
         label="Town or city"
         name="city"
+        {...(fieldErrors['city'] ? { error: fieldErrors['city'] } : {})}
         autoComplete="address-level2"
         required
         value={city}
@@ -506,6 +564,7 @@ export function Checkout({
       <Field
         label="State"
         name="region"
+        {...(fieldErrors['region'] ? { error: fieldErrors['region'] } : {})}
         hint="Two letters, like TX."
         autoComplete="address-level1"
         maxLength={2}
@@ -516,6 +575,7 @@ export function Checkout({
       <Field
         label="ZIP"
         name="postalCode"
+        {...(fieldErrors['postalCode'] ? { error: fieldErrors['postalCode'] } : {})}
         autoComplete="postal-code"
         required
         value={postalCode}

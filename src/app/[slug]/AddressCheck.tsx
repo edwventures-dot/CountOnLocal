@@ -15,13 +15,14 @@
 
 import { useState } from 'react'
 import { SlowNotice } from '@/components/SlowNotice'
+import { stashAddress } from '@/lib/addressHandoff'
 
 type Outcome =
   | { kind: 'idle' }
   | { kind: 'checking' }
   | { kind: 'eligible'; normalized: string }
   | { kind: 'ineligible'; normalized: string }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; message: string; fields?: Record<string, string> }
 
 export function AddressCheck({ providerServiceId }: { providerServiceId: string }) {
   const [line1, setLine1] = useState('')
@@ -43,11 +44,22 @@ export function AddressCheck({ providerServiceId }: { providerServiceId: string 
       const body = await res.json()
 
       if (!res.ok) {
+        // The server names the field that failed. Saying "check the
+        // highlighted fields" while highlighting nothing left somebody
+        // staring at four identical boxes -- a four-digit ZIP looks exactly
+        // like a five-digit one when nothing points at it.
         setOutcome({
           kind: 'error',
           message: body?.error?.message ?? 'We could not check that address right now.',
+          fields: (body?.error?.fieldErrors ?? {}) as Record<string, string>,
         })
         return
+      }
+
+      if (body.eligible) {
+        // Carried into checkout so it is not asked for twice. In the tab,
+        // never in the URL -- see addressHandoff.
+        stashAddress(providerServiceId, { line1, city, region, postalCode })
       }
 
       setOutcome(
@@ -61,6 +73,21 @@ export function AddressCheck({ providerServiceId }: { providerServiceId: string 
   }
 
   const busy = outcome.kind === 'checking'
+  const fieldErrors = outcome.kind === 'error' ? (outcome.fields ?? {}) : {}
+
+  /** Red border and a screen-reader flag on a field the server rejected. */
+  const markIf = (name: string) =>
+    fieldErrors[name]
+      ? { borderColor: '#b91c1c', outlineColor: '#b91c1c' }
+      : {}
+
+  /** The reason, under the field it belongs to. */
+  const noteFor = (name: string) =>
+    fieldErrors[name] ? (
+      <p style={S.fieldError} role="alert">
+        {fieldErrors[name]}
+      </p>
+    ) : null
 
   return (
     <div style={{ marginTop: 18 }}>
@@ -72,9 +99,11 @@ export function AddressCheck({ providerServiceId }: { providerServiceId: string 
             onChange={(e) => setLine1(e.target.value)}
             placeholder="Street address"
             aria-label="Street address"
-            style={{ ...S.input, flex: 1 }}
+            aria-invalid={Boolean(fieldErrors['line1'])}
+            style={{ ...S.input, flex: 1, ...markIf('line1') }}
           />
         </div>
+        {noteFor('line1')}
         <div style={S.row}>
           <input
             required
@@ -82,7 +111,8 @@ export function AddressCheck({ providerServiceId }: { providerServiceId: string 
             onChange={(e) => setCity(e.target.value)}
             placeholder="City"
             aria-label="City"
-            style={{ ...S.input, flex: 2 }}
+            aria-invalid={Boolean(fieldErrors['city'])}
+            style={{ ...S.input, flex: 2, ...markIf('city') }}
           />
           <input
             required
@@ -90,8 +120,9 @@ export function AddressCheck({ providerServiceId }: { providerServiceId: string 
             onChange={(e) => setRegion(e.target.value.toUpperCase().slice(0, 2))}
             placeholder="State"
             aria-label="State"
+            aria-invalid={Boolean(fieldErrors['region'])}
             maxLength={2}
-            style={{ ...S.input, width: 84 }}
+            style={{ ...S.input, width: 84, ...markIf('region') }}
           />
           <input
             required
@@ -99,10 +130,14 @@ export function AddressCheck({ providerServiceId }: { providerServiceId: string 
             onChange={(e) => setPostalCode(e.target.value)}
             placeholder="ZIP"
             aria-label="ZIP code"
+            aria-invalid={Boolean(fieldErrors['postalCode'])}
             inputMode="numeric"
-            style={{ ...S.input, width: 120 }}
+            style={{ ...S.input, width: 120, ...markIf('postalCode') }}
           />
         </div>
+        {noteFor('city')}
+        {noteFor('region')}
+        {noteFor('postalCode')}
         <button type="submit" disabled={busy} style={{ ...S.cta, opacity: busy ? 0.6 : 1 }}>
           {busy ? 'Checking…' : 'Check my address'}
         </button>
@@ -157,6 +192,11 @@ const GREEN = '#16875B'
 const CORAL = '#FF765C'
 
 const S: Record<string, React.CSSProperties> = {
+  fieldError: {
+    color: '#b91c1c',
+    fontSize: 13,
+    margin: '4px 0 8px',
+  },
   row: { display: 'flex', gap: 10, marginBottom: 10 },
   input: { border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, fontSize: 15, minWidth: 0 },
   cta: {
