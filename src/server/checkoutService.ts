@@ -23,6 +23,9 @@ import {
 } from '@/domain/schedule'
 import { parsePlainDate, type PlainDate } from '@/domain/age'
 import { resolveTimeZone } from '@/domain/jurisdiction'
+import { canAcceptNewSubscription } from '@/domain/gates'
+import { loadProviderGateContext } from '@/server/providerGate'
+import type { Role } from '@/domain/roles'
 import { checkAddressEligibility, type AddressFields } from '@/server/eligibility'
 import { todayUtc } from '@/server/providerOnboarding'
 import { writeAudit } from '@/server/audit'
@@ -94,6 +97,7 @@ export type PreviewResult =
         | 'STATE_BLOCKED'
         | 'SERVICE_BLOCKED_IN_STATE'
         | 'STATE_NOT_CLEARED'
+        | 'PROVIDER_NOT_ELIGIBLE'
       /** Set for the jurisdiction refusals, which name the state. */
       message?: string | undefined
     }
@@ -290,6 +294,11 @@ export type CreateSubscriptionResult =
       occurrenceCount: number
       /** Absent when no code was supplied. */
       referral?: ReferralOutcome
+      /**
+       * True when this is an abandoned checkout being picked up rather than
+       * a subscription just created. Nothing was inserted.
+       */
+      resumed?: boolean
     }
   | {
       ok: false
@@ -307,6 +316,7 @@ export type CreateSubscriptionResult =
         | 'ATTESTATION_INVALID'
         | 'SERVICE_DETAILS_REQUIRED'
         | 'WRITE_FAILED'
+        | 'PROVIDER_NOT_ELIGIBLE'
         // Same three as previewCheckout. Subscribing runs the preview
         // first, so a state closed between the preview and the confirm is
         // refused here rather than becoming a subscription nobody may
@@ -355,6 +365,25 @@ export async function createSubscription(args: {
   if (!preview.preview.eligible) return { ok: false, code: 'NOT_ELIGIBLE' }
   if (preview.preview.atCapacity) return { ok: false, code: 'AT_CAPACITY' }
   if (preview.preview.earliestStartDate === null) return { ok: false, code: 'NO_SCHEDULE' }
+
+  // Can this provider take a customer at all?
+  //
+  // This used to be asked only at activation -- which is after the customer
+  // has read the attestation, signed it, and typed a card number. Being
+  // told "this service is not taking new customers right now" at that point
+  // is both a waste of their time and a worse disclosure than saying it
+  // before they started.
+  //
+  // CLAUDE.md rule 2: a provider aged 13-17 cannot accept a paying customer
+  // until the guardian relationship is verified. Activation still checks
+  // again, because the guardian can be revoked between here and payment and
+  // the check that guards the money must be the one next to the money.
+  const gate = await providerCanAcceptSubscription({
+    db,
+    providerServiceId: input.providerServiceId,
+    now,
+  })
+  if (!gate.ok) return { ok: false, code: 'PROVIDER_NOT_ELIGIBLE', message: gate.message }
 
   // A caller-supplied start date must be one the schedule actually offers,
   // and no earlier than the provider's notice window allows.
@@ -483,7 +512,43 @@ export async function createSubscription(args: {
     .single()
 
   if (subError || !subscription) {
-    if (subError?.code === '23505') return { ok: false, code: 'ALREADY_SUBSCRIBED' }
+    if (subError?.code === '23505') {
+      // ux_one_live_subscription counts 'pending' as live, which is right
+      // for stopping a double-submit and wrong for the case that actually
+      // happens: somebody reaches the card step, closes the tab, and comes
+      // back. Their subscription exists, has never been paid for, and
+      // cannot be reached from anywhere -- so "you already have this
+      // service at that address" is a dead end they cannot leave.
+      //
+      // A pending row with no payment method is an abandoned checkout, not
+      // a subscription. Hand it back so the caller can finish paying for
+      // it. Anything further along genuinely is a duplicate.
+      const { data: abandoned } = await db
+        .from('subscriptions')
+        .select('id, state, stripe_payment_method_id')
+        .eq('customer_user_id', customerUserId)
+        .eq('provider_service_id', input.providerServiceId)
+        .eq('service_address_id', address.id)
+        .eq('state', 'pending')
+        .is('stripe_payment_method_id', null)
+        .maybeSingle()
+
+      if (abandoned) {
+        return {
+          ok: true,
+          subscriptionId: abandoned.id,
+          state: 'pending',
+          startDate,
+          quote: preview.preview.quote,
+          occurrenceCount: scheduled.length,
+          // So the caller can say "picking up where you left off" rather
+          // than implying a new subscription was just created.
+          resumed: true,
+        }
+      }
+
+      return { ok: false, code: 'ALREADY_SUBSCRIBED' }
+    }
     console.error('[checkout] subscription write failed', subError?.message)
     return { ok: false, code: 'WRITE_FAILED' }
   }
@@ -582,4 +647,51 @@ export async function createSubscription(args: {
     occurrenceCount: scheduled.length,
     ...(referral ? { referral } : {}),
   }
+}
+
+/**
+ * Whether the provider behind a service may take a new customer.
+ *
+ * Lifted out of activationService so the question can be asked before the
+ * customer commits rather than only after they have typed a card. Both
+ * places ask it: this one to avoid wasting somebody's time, and activation
+ * to guard the money, because a guardian can be revoked in between.
+ *
+ * The message is deliberately the same neutral sentence in every case. A
+ * customer does not get to learn that a particular teenager's guardian
+ * withdrew approval.
+ */
+async function providerCanAcceptSubscription(args: {
+  db: Db
+  providerServiceId: string
+  now: Date
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const refused = { ok: false as const, message: 'This service is not taking new customers right now.' }
+
+  const { data: row } = await args.db
+    .from('provider_services')
+    .select('businesses!inner ( provider_user_id )')
+    .eq('id', args.providerServiceId)
+    .maybeSingle()
+
+  const biz = (Array.isArray(row?.businesses) ? row?.businesses[0] : row?.businesses) as
+    | { provider_user_id?: string }
+    | undefined
+  const providerUserId = biz?.provider_user_id
+  if (!providerUserId) return refused
+
+  const { data: roleRows } = await args.db
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', providerUserId)
+
+  const ctx = await loadProviderGateContext({
+    db: args.db,
+    providerUserId,
+    roles: (roleRows ?? []).map((r) => r.role as Role),
+    now: args.now,
+  })
+  if (!ctx) return refused
+
+  return canAcceptNewSubscription(ctx).allowed ? { ok: true } : refused
 }

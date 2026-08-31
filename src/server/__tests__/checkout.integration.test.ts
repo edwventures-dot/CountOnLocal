@@ -96,6 +96,12 @@ beforeAll(async () => {
     guardian_state: 'not_required',
   })
 
+  // Onboarding grants this alongside the profile, so a fixture without it
+  // builds a provider who cannot exist: a published business held by
+  // somebody with no provider role. That state is what made the demo
+  // storefront refuse a real purchase at the card step.
+  await admin.from('user_roles').insert({ user_id: providerId, role: 'provider' })
+
   const { data: biz } = await admin
     .from('businesses')
     .insert({
@@ -310,17 +316,24 @@ describe('creating a subscription', () => {
     await admin.from('provider_services').update({ price_cents: 300 }).eq('id', serviceId)
   })
 
-  it('refuses a duplicate subscription for the same customer, service and address', async () => {
+  it('never makes a second subscription for the same customer, service and address', async () => {
     // This is why addresses are deduplicated. Inserting a fresh address row
     // per checkout meant the unique index never matched, and a second
     // Subscribe click produced a second subscription and a second bill.
+    //
+    // The invariant is "one subscription, not two", which is what the count
+    // below checks. This used to assert ALREADY_SUBSCRIBED as well, and that
+    // was the enforcement rather than the rule -- an unpaid pending row is
+    // now handed back to be finished instead of refused, because refusing
+    // stranded anybody who closed the tab at the card step.
     const r = await createSubscription({
       db: admin,
       customerUserId: customerId,
       input: { providerServiceId: serviceId, address: INSIDE, attestation: { acknowledgedItems: ['is_adult','no_background_checks','provider_may_be_minor','accurate_address_and_dog','messaging','not_emergency_service'], typedName: 'Test Customer' } },
       now: NOW,
     })
-    expect(r).toEqual({ ok: false, code: 'ALREADY_SUBSCRIBED' })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.resumed).toBe(true)
 
     const { count } = await admin
       .from('subscriptions')
@@ -423,5 +436,112 @@ describe('an unpublished service cannot be subscribed to', () => {
       .from('businesses')
       .update({ state: 'published' })
       .eq('slug', `checkout-test-${stamp}`)
+  })
+})
+
+describe('coming back to an abandoned checkout', () => {
+  // The fixture caps at two addresses and the tests above have used them.
+  // Raised for this block only, so an AT_CAPACITY refusal cannot be
+  // mistaken for the duplicate handling being wrong.
+  beforeAll(async () => {
+    await admin
+      .from('provider_services')
+      .update({ capacity_rule: { maxAddresses: 30 } })
+      .eq('id', serviceId)
+  })
+
+  afterAll(async () => {
+    await admin
+      .from('provider_services')
+      .update({ capacity_rule: { maxAddresses: 2 } })
+      .eq('id', serviceId)
+  })
+
+  const baseInput = () => ({
+    providerServiceId: serviceId,
+    address: INSIDE,
+    attestation: {
+      acknowledgedItems: [
+        'is_adult',
+        'no_background_checks',
+        'provider_may_be_minor',
+        'accurate_address_and_dog',
+        'messaging',
+        'not_emergency_service',
+      ],
+      typedName: 'Test Customer',
+    },
+  })
+
+  it('picks the pending one up instead of refusing', async () => {
+    // The dead end this closes, found by driving the flow in a browser:
+    // ux_one_live_subscription counts 'pending' as live, which is right for
+    // stopping a double-submit and wrong for somebody who reached the card
+    // step and closed the tab. Their subscription existed, had never been
+    // paid for, was reachable from nowhere, and every attempt to start
+    // again was refused with "you already have this service at that
+    // address" -- permanently.
+    const first = await createSubscription({
+      db: admin,
+      customerUserId: customerId,
+      input: baseInput(),
+      now: NOW,
+    })
+    if (!first.ok) throw new Error(`first subscribe failed: ${first.code}`)
+    // Not asserting that the first call created rather than resumed: this
+    // file shares one customer and the tests above have already made the
+    // pending row. What matters is that both calls land on the same
+    // subscription and no second one appears.
+
+    const second = await createSubscription({
+      db: admin,
+      customerUserId: customerId,
+      input: baseInput(),
+      now: NOW,
+    })
+
+    expect(second.ok).toBe(true)
+    if (!second.ok) return
+    expect(second.resumed).toBe(true)
+    // The same subscription, not a second one.
+    expect(second.subscriptionId).toBe(first.subscriptionId)
+
+    const { count } = await admin
+      .from('subscriptions')
+      .select('id', { count: 'exact', head: true })
+      .eq('customer_user_id', customerId)
+      .eq('state', 'pending')
+    expect(count).toBe(1)
+  })
+
+  it('still refuses once the subscription is actually paid for', async () => {
+    // A real duplicate. Only an unpaid pending row is an abandoned
+    // checkout; anything further along is somebody subscribing twice.
+    const { data: sub } = await admin
+      .from('subscriptions')
+      .select('id')
+      .eq('customer_user_id', customerId)
+      .eq('state', 'pending')
+      .maybeSingle()
+
+    await admin
+      .from('subscriptions')
+      .update({ stripe_payment_method_id: 'pm_test_already_paid' })
+      .eq('id', sub!.id)
+
+    const again = await createSubscription({
+      db: admin,
+      customerUserId: customerId,
+      input: baseInput(),
+      now: NOW,
+    })
+
+    expect(again.ok).toBe(false)
+    if (!again.ok) expect(again.code).toBe('ALREADY_SUBSCRIBED')
+
+    await admin
+      .from('subscriptions')
+      .update({ stripe_payment_method_id: null })
+      .eq('id', sub!.id)
   })
 })

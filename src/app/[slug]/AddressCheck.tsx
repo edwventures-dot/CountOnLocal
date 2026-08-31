@@ -14,6 +14,7 @@
  */
 
 import { useState } from 'react'
+import { SlowNotice } from '@/components/SlowNotice'
 
 type Outcome =
   | { kind: 'idle' }
@@ -105,6 +106,10 @@ export function AddressCheck({ providerServiceId }: { providerServiceId: string 
         <button type="submit" disabled={busy} style={{ ...S.cta, opacity: busy ? 0.6 : 1 }}>
           {busy ? 'Checking…' : 'Check my address'}
         </button>
+        <SlowNotice waiting={busy}>
+          Still checking. The address service is slow at the moment — this can take up to fifteen
+          seconds. No need to press it again.
+        </SlowNotice>
       </form>
 
       {outcome.kind === 'eligible' ? (

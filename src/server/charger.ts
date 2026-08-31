@@ -75,6 +75,18 @@ export type SetupIntentResult =
        * entire point of doing it this way rather than accepting a number.
        */
       clientSecret: string
+      /**
+       * Where the intent already is.
+       *
+       * An idempotency key stable per subscription means Stripe hands back
+       * the SAME intent on every call -- including after it has succeeded.
+       * A succeeded intent cannot mount a PaymentElement, so a customer
+       * whose card was saved and whose activation then failed could never
+       * get past the card screen again. The caller needs to know.
+       */
+      status: string
+      /** Present once a card has actually been collected. */
+      paymentMethodRef: string | null
     }
   | { ok: false; processor: string; message: string }
 
@@ -199,11 +211,28 @@ export class StripeCharger implements Charger {
         return { ok: false, processor: 'stripe', message: 'Setup intent returned no client secret.' }
       }
 
+      // The create call above is idempotent per subscription, and an
+      // idempotent replay returns the response body Stripe cached the FIRST
+      // time -- when the intent was necessarily requires_payment_method
+      // with no card on it. So `intent` here can be an accurate description
+      // of a state this intent left days ago.
+      //
+      // Retrieved fresh for that reason. Without it, an intent that has
+      // since succeeded still reports as awaiting a card, the browser tries
+      // to mount a form against it, and Stripe refuses with "this
+      // SetupIntent is in a terminal state".
+      const live = await stripe().setupIntents.retrieve(intent.id)
+
       return {
         ok: true,
         processor: 'stripe',
-        externalId: intent.id,
+        externalId: live.id,
         clientSecret: intent.client_secret,
+        status: live.status,
+        paymentMethodRef:
+          typeof live.payment_method === 'string'
+            ? live.payment_method
+            : (live.payment_method?.id ?? null),
       }
     } catch (err) {
       const e = err as { message?: string }
@@ -381,6 +410,8 @@ export class StubCharger implements Charger {
         ok: true,
         processor: 'stub',
         externalId: `seti_stub_${request.idempotencyKey}`,
+        status: 'requires_payment_method',
+        paymentMethodRef: null,
         clientSecret: `seti_stub_${request.idempotencyKey}_secret`,
       }
     )

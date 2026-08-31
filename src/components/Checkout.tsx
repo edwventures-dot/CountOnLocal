@@ -30,6 +30,7 @@ import { useRouter } from 'next/navigation'
 import { Alert, Field } from '@/components/ui'
 import { CUSTOMER_ATTESTATION } from '@/domain/consent'
 import { BITE_HISTORY, DOG_SIZES } from '@/domain/serviceDetails'
+import { SlowNotice, Spinner } from '@/components/SlowNotice'
 
 type Preview = {
   business: { name: string; slug: string }
@@ -53,7 +54,15 @@ type Preview = {
 type Stage =
   | { name: 'address' }
   | { name: 'review'; preview: Preview }
-  | { name: 'pay'; subscriptionId: string; clientSecret: string; totalCents: number }
+  | {
+      name: 'pay'
+      subscriptionId: string
+      clientSecret: string
+      totalCents: number
+      /** A card was already collected on an earlier, unfinished attempt. */
+      alreadyCollected?: boolean
+      paymentMethodRef?: string
+    }
   | { name: 'done'; chargedCents: number }
 
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`
@@ -198,11 +207,19 @@ export function Checkout({
         return
       }
 
+      const setupBody = setup.body as unknown as {
+        clientSecret: string
+        nextStage?: string
+        paymentMethodRef?: string
+      }
       setStage({
         name: 'pay',
         subscriptionId,
-        clientSecret: (setup.body as unknown as { clientSecret: string }).clientSecret,
+        clientSecret: setupBody.clientSecret,
         totalCents,
+        ...(setupBody.nextStage === 'charge'
+          ? { alreadyCollected: true, paymentMethodRef: setupBody.paymentMethodRef }
+          : {}),
       })
     } catch {
       setError('We could not reach the server. Please try again.')
@@ -231,6 +248,8 @@ export function Checkout({
         subscriptionId={stage.subscriptionId}
         clientSecret={stage.clientSecret}
         totalCents={stage.totalCents}
+        {...(stage.alreadyCollected ? { alreadyCollected: true } : {})}
+        {...(stage.paymentMethodRef ? { savedPaymentMethodRef: stage.paymentMethodRef } : {})}
         onDone={(chargedCents) => setStage({ name: 'done', chargedCents })}
       />
     )
@@ -437,8 +456,18 @@ export function Checkout({
           onClick={confirm}
           disabled={busy || !allAcknowledged || !signatureLooksReal || !dogComplete}
         >
-          {busy ? 'Setting up...' : 'Continue to payment'}
+          {busy ? (
+            <>
+              <Spinner /> Setting up...
+            </>
+          ) : (
+            'Continue to payment'
+          )}
         </button>
+        <SlowNotice waiting={busy}>
+          Still setting up your payment. This can take a few seconds — please do not press it
+          again or close the page.
+        </SlowNotice>
         <button
           className="btn btn--link"
           type="button"
@@ -494,15 +523,32 @@ export function Checkout({
       />
 
       <button className="btn btn--full" type="submit" disabled={busy}>
-        {busy ? 'Checking...' : 'Check my address'}
+        {busy ? (
+          <>
+            <Spinner /> Checking...
+          </>
+        ) : (
+          'Check my address'
+        )}
       </button>
+      <SlowNotice waiting={busy}>
+        Still checking. The address service is slow at the moment — this can take up to fifteen
+        seconds. No need to press it again.
+      </SlowNotice>
     </form>
   )
 }
 
 type StripeLike = {
   elements: (options: { clientSecret: string }) => {
-    create: (kind: string, options?: unknown) => { mount: (selector: string) => void }
+    create: (
+      kind: string,
+      options?: unknown,
+    ) => {
+      mount: (selector: string) => void
+      /** Stripe reports a failed mount here. Unhandled, it logs and stops. */
+      on: (event: string, handler: (payload: { error?: { message?: string } }) => void) => void
+    }
     submit: () => Promise<{ error?: { message?: string } }>
   }
   confirmSetup: (options: {
@@ -515,11 +561,16 @@ function PayStep({
   subscriptionId,
   clientSecret,
   totalCents,
+  alreadyCollected,
+  savedPaymentMethodRef,
   onDone,
 }: {
   subscriptionId: string
   clientSecret: string
   totalCents: number
+  /** A card was collected on an earlier attempt that did not finish. */
+  alreadyCollected?: boolean
+  savedPaymentMethodRef?: string
   onDone: (chargedCents: number) => void
 }) {
   const stripeReady = useStripeJs()
@@ -530,6 +581,10 @@ function PayStep({
   const mounted = useRef(false)
 
   useEffect(() => {
+    // Nothing to collect. The setup intent already has a card on it, and
+    // mounting a form against a spent intent is what produced a bare
+    // "loaderror" in the console and a dead screen for the customer.
+    if (alreadyCollected) return
     if (!stripeReady || mounted.current) return
     const key = process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY']
     if (!key) {
@@ -540,21 +595,44 @@ function PayStep({
     const factory = (window as unknown as { Stripe: (k: string) => StripeLike }).Stripe
     const stripe = factory(key)
     const elements = stripe.elements({ clientSecret })
-    elements.create('payment').mount('#payment-element')
+    const element = elements.create('payment')
+
+    // Stripe emits this when the form cannot load. Without a handler it
+    // logs to the console and the customer is left looking at an empty box
+    // with a Pay button under it.
+    element.on('loaderror', (payload) => {
+      console.error('[checkout] payment element failed to load', payload?.error?.message)
+      setError(
+        payload?.error?.message ??
+          'The card form could not load. Refresh the page and try again.',
+      )
+    })
+
+    element.mount('#payment-element')
 
     stripeRef.current = stripe
     elementsRef.current = elements
     mounted.current = true
-  }, [stripeReady, clientSecret])
+  }, [stripeReady, clientSecret, alreadyCollected])
 
   async function pay() {
-    const stripe = stripeRef.current
-    const elements = elementsRef.current
-    if (!stripe || !elements) return
-
     setError(null)
     setBusy(true)
     try {
+      // The card is already with Stripe from an attempt that did not
+      // finish. Charge it rather than asking for it again.
+      if (alreadyCollected && savedPaymentMethodRef) {
+        await charge(savedPaymentMethodRef)
+        return
+      }
+
+      const stripe = stripeRef.current
+      const elements = elementsRef.current
+      if (!stripe || !elements) {
+        setError('The card form is not ready yet. Give it a moment and try again.')
+        return
+      }
+
       const submitted = await elements.submit()
       if (submitted.error) {
         setError(submitted.error.message ?? 'Check the card details.')
@@ -575,24 +653,35 @@ function PayStep({
         return
       }
 
-      const res = await fetch(`/api/v1/subscriptions/${subscriptionId}/payment`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentMethodRef }),
-      })
-      const body = await res.json().catch(() => ({}))
-
-      if (!res.ok) {
-        setError(body?.error?.message ?? 'We could not take payment.')
-        return
-      }
-
-      onDone(body?.billing?.chargedCents ?? totalCents)
+      await charge(paymentMethodRef)
     } catch {
       setError('We could not reach the server. Please try again.')
     } finally {
       setBusy(false)
     }
+  }
+
+  /**
+   * Hands the saved card to the server and takes the first payment.
+   *
+   * Separate from pay() because it is reached two ways: straight after the
+   * customer types a card, and on a retry where the card was collected but
+   * the charge never happened.
+   */
+  async function charge(paymentMethodRef: string): Promise<void> {
+    const res = await fetch(`/api/v1/subscriptions/${subscriptionId}/payment`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentMethodRef }),
+    })
+    const body = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      setError(body?.error?.message ?? 'We could not take payment.')
+      return
+    }
+
+    onDone(body?.billing?.chargedCents ?? totalCents)
   }
 
   return (
@@ -603,15 +692,46 @@ function PayStep({
         {money(totalCents)} today, then the same every cycle until you pause or cancel.
       </p>
 
-      {/* Stripe mounts an iframe here. Card details are typed inside it and
-          never reach this application. */}
-      <div id="payment-element" />
+      {alreadyCollected ? (
+        <p className="small muted">
+          We already have the card you entered. Nothing more to type — press pay to finish.
+        </p>
+      ) : (
+        <>
+          {/* Stripe mounts an iframe here. Card details are typed inside it
+              and never reach this application. */}
+          <div id="payment-element" />
+          {!stripeReady ? (
+            <p className="small muted">
+              <Spinner /> Loading the card form...
+            </p>
+          ) : null}
+        </>
+      )}
 
-      {!stripeReady ? <p className="small muted">Loading the card form...</p> : null}
-
-      <button className="btn btn--full" type="button" onClick={pay} disabled={busy || !stripeReady}>
-        {busy ? 'Paying...' : `Pay ${money(totalCents)}`}
+      <button
+        className="btn btn--full"
+        type="button"
+        onClick={pay}
+        disabled={busy || (!stripeReady && !alreadyCollected)}
+      >
+        {busy ? (
+          <>
+            <Spinner /> Paying...
+          </>
+        ) : (
+          `Pay ${money(totalCents)}`
+        )}
       </button>
+
+      {/* Taking a payment is the longest wait in the product: a card
+          confirmation, a charge, and the subscription going active. Ten
+          seconds of a button reading "Paying..." with nothing moving is
+          where somebody presses it again. */}
+      <SlowNotice waiting={busy}>
+        Still going. Do not close this page or press pay again — your card may already have been
+        charged.
+      </SlowNotice>
 
       <p className="small muted" style={{ marginBottom: 0 }}>
         Card details go straight to Stripe. Count On Local never sees or stores your card number.

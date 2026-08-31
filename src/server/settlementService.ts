@@ -54,7 +54,7 @@ import { writeBalancedEntries } from '@/server/ledgerWriter'
 import { getCharger } from '@/server/charger'
 import { markDiscountSpent, quoteWithReferral } from '@/server/referralService'
 import { writeAudit } from '@/server/audit'
-import { enqueueNotification } from '@/server/notifications'
+import { noticeToCustomer } from '@/server/notices'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
@@ -258,7 +258,7 @@ export async function settleSubscription(args: {
         // The subscription just stopped and nobody was telling the
         // customer. They would have found out from a visit that did not
         // happen, which is the worst possible way to learn a card expired.
-        await notifyCustomer({
+        await noticeToCustomer({
           db,
           subscriptionId: row.id,
           customerUserId: row.customer_user_id,
@@ -298,7 +298,7 @@ export async function settleSubscription(args: {
   if (written.ok) {
     // A receipt. Money left somebody's account and the product said
     // nothing -- PRD 20 asks for this and nothing sent it.
-    await notifyCustomer({
+    await noticeToCustomer({
       db,
       subscriptionId: row.id,
       customerUserId: row.customer_user_id,
@@ -438,55 +438,3 @@ export async function runSettlement(args: { db: Db; now: Date }): Promise<Settle
   return result
 }
 
-/**
- * Tells a customer something about their own billing.
- *
- * Never throws into the settlement path: a receipt that cannot be queued
- * must not roll back or fail a charge that already succeeded. The outbox is
- * the retry mechanism, and a missing receipt is a smaller problem than a
- * payment that appears to have failed when it did not.
- *
- * Keyed off the cycle's own idempotency key, so a settlement re-run after a
- * partial failure does not send a second receipt for one charge.
- */
-async function notifyCustomer(args: {
-  db: Db
-  subscriptionId: string
-  customerUserId: string
-  now: Date
-  idempotencyKey: string
-  kind: 'cycle.settled' | 'subscription.payment_failed'
-  subject: string
-  preview: string
-}): Promise<void> {
-  try {
-    const { data: user } = await args.db
-      .from('users')
-      .select('email')
-      .eq('id', args.customerUserId)
-      .maybeSingle()
-
-    if (!user?.email) return
-
-    await enqueueNotification({
-      db: args.db,
-      recipientUserId: args.customerUserId,
-      now: args.now,
-      idempotencyKey: args.idempotencyKey,
-      draft: {
-        kind: args.kind,
-        channel: 'email',
-        destination: user.email,
-        subject: args.subject,
-        preview: args.preview,
-        payload: { subscriptionId: args.subscriptionId },
-      },
-    })
-  } catch (err) {
-    console.error('[settlement] could not queue a customer notification', {
-      subscriptionId: args.subscriptionId,
-      kind: args.kind,
-      message: err instanceof Error ? err.message : String(err),
-    })
-  }
-}

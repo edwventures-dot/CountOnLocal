@@ -45,7 +45,21 @@ export interface Geocoder {
 }
 
 const CENSUS_URL = 'https://geocoding.geo.census.gov/geocoder/locations/address'
-const TIMEOUT_MS = 8000
+
+/**
+ * How long to wait for one attempt.
+ *
+ * Was 8000, which was below what the service actually took on a bad day.
+ * Measured on 2026-08-31: three consecutive requests at 9.2s, 10.3s and
+ * 9.2s, one of them a 502 -- so every address check failed, and a customer
+ * typing their own address got "we could not check that right now" with no
+ * way to tell that it was not their fault.
+ *
+ * The normal case is nowhere near this: the same endpoint answered in 0.27s
+ * a few hours earlier. This ceiling exists for the degraded day, not the
+ * ordinary one.
+ */
+const TIMEOUT_MS = 15_000
 
 /**
  * US Census Bureau geocoder.
@@ -68,16 +82,46 @@ export class CensusGeocoder implements Geocoder {
       format: 'json',
     })
 
-    const timeout = AbortSignal.timeout(TIMEOUT_MS)
-    const combined = signal ? AbortSignal.any([signal, timeout]) : timeout
+    const url = `${CENSUS_URL}?${params.toString()}`
+
+    /**
+     * One attempt. Distinguishes a fast refusal from a slow one, because
+     * only one of them is worth repeating.
+     */
+    const attempt = async (): Promise<
+      { ok: true; payload: unknown } | { ok: false; retryable: boolean }
+    > => {
+      const timeout = AbortSignal.timeout(TIMEOUT_MS)
+      const combined = signal ? AbortSignal.any([signal, timeout]) : timeout
+      try {
+        const res = await fetch(url, { signal: combined })
+        // A 5xx is the service having a moment and is worth one more go.
+        // A 4xx is about the request and will fail identically.
+        if (!res.ok) return { ok: false, retryable: res.status >= 500 }
+        return { ok: true, payload: await res.json() }
+      } catch {
+        // A timeout or a dropped connection. Deliberately not retried: the
+        // caller has already waited the full budget, and a second wait of
+        // the same length is worse for them than an error they can act on.
+        return { ok: false, retryable: false }
+      }
+    }
 
     let payload: unknown
-    try {
-      const res = await fetch(`${CENSUS_URL}?${params.toString()}`, { signal: combined })
-      if (!res.ok) return { ok: false, code: 'PROVIDER_UNAVAILABLE' }
-      payload = await res.json()
-    } catch {
-      // Deliberately no address in this log line.
+    const first = await attempt()
+    if (first.ok) {
+      payload = first.payload
+    } else if (first.retryable) {
+      // Immediate, because a 5xx comes back fast and the whole cost of
+      // this retry is one more round trip.
+      const second = await attempt()
+      if (!second.ok) {
+        // Deliberately no address in this log line.
+        console.error('[geocoder] census request failed after a retry')
+        return { ok: false, code: 'PROVIDER_UNAVAILABLE' }
+      }
+      payload = second.payload
+    } else {
       console.error('[geocoder] census request failed')
       return { ok: false, code: 'PROVIDER_UNAVAILABLE' }
     }

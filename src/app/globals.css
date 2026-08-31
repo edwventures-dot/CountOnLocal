@@ -822,3 +822,31 @@ input[type='range'].field__input {
   font-size: 1.125rem;
   font-weight: 700;
 }
+
+/* A wait that is visibly still moving. Text alone reads as a frozen page,
+   and a frozen page gets clicked again. */
+.spinner {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.4em;
+  vertical-align: -0.1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Respect a stated preference for less motion: fall back to a pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% { opacity: 0.35; }
+  }
+}

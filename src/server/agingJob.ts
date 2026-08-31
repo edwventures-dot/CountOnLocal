@@ -41,7 +41,7 @@
 import { hasAgedOut, daysUntilEighteen, parsePlainDate } from '@/domain/age'
 import { transition } from '@/domain/guardian'
 import { enqueueNotification } from '@/server/notifications'
-import { providerAndGuardian } from '@/server/providerNotices'
+import { providerAndGuardian } from '@/server/notices'
 import { civilDateIn } from '@/server/occurrenceJobs'
 import { writeAudit } from '@/server/audit'
 import type { SupabaseClient } from '@supabase/supabase-js'

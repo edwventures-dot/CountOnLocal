@@ -131,3 +131,56 @@ export async function noticeToProviderAndGuardian(args: {
     return 0
   }
 }
+
+/**
+ * Tells a customer something about their own billing.
+ *
+ * Never throws into the settlement path: a receipt that cannot be queued
+ * must not roll back or fail a charge that already succeeded. The outbox is
+ * the retry mechanism, and a missing receipt is a smaller problem than a
+ * payment that appears to have failed when it did not.
+ *
+ * Keyed off the cycle's own idempotency key, so a settlement re-run after a
+ * partial failure does not send a second receipt for one charge.
+ */
+export async function noticeToCustomer(args: {
+  db: Db
+  subscriptionId: string
+  customerUserId: string
+  now: Date
+  idempotencyKey: string
+  kind: 'cycle.settled' | 'subscription.payment_failed'
+  subject: string
+  preview: string
+}): Promise<void> {
+  try {
+    const { data: user } = await args.db
+      .from('users')
+      .select('email')
+      .eq('id', args.customerUserId)
+      .maybeSingle()
+
+    if (!user?.email) return
+
+    await enqueueNotification({
+      db: args.db,
+      recipientUserId: args.customerUserId,
+      now: args.now,
+      idempotencyKey: args.idempotencyKey,
+      draft: {
+        kind: args.kind,
+        channel: 'email',
+        destination: user.email,
+        subject: args.subject,
+        preview: args.preview,
+        payload: { subscriptionId: args.subscriptionId },
+      },
+    })
+  } catch (err) {
+    console.error('[notices] could not queue a customer notification', {
+      subscriptionId: args.subscriptionId,
+      kind: args.kind,
+      message: err instanceof Error ? err.message : String(err),
+    })
+  }
+}

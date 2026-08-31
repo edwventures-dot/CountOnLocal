@@ -66,11 +66,12 @@ import { markDiscountSpent, quoteWithReferral } from '@/server/referralService'
 import { writeBalancedEntries } from '@/server/ledgerWriter'
 import { getCharger } from '@/server/charger'
 import { writeAudit } from '@/server/audit'
-import { noticeToProviderAndGuardian } from '@/server/providerNotices'
+import { noticeToCustomer, noticeToProviderAndGuardian } from '@/server/notices'
 import type { Role } from '@/domain/roles'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { z } from 'zod'
+import { formatCents } from '@/domain/money'
 
 type Db = SupabaseClient<Database>
 
@@ -110,7 +111,18 @@ export type ActivationResult =
   | { ok: false; code: ActivationFailure; message: string }
 
 export type CardSetupResult =
-  | { ok: true; clientSecret: string; customerRef: string }
+  | {
+      ok: true
+      clientSecret: string
+      customerRef: string
+      /**
+       * A card is already on the setup intent. The browser must not try to
+       * mount a card form against it -- a succeeded intent cannot take one
+       * -- and should charge with paymentMethodRef instead.
+       */
+      alreadyCollected?: boolean
+      paymentMethodRef?: string
+    }
   | { ok: false; code: 'NOT_FOUND' | 'NOT_YOUR_SUBSCRIPTION' | 'NOT_PENDING' | 'PROCESSOR_ERROR' | 'WRITE_FAILED'; message: string }
 
 type Loaded = {
@@ -227,6 +239,24 @@ export async function startCardSetup(args: {
     idempotencyKey: `setup:${sub.id}`,
   })
   if (!intent.ok) return { ok: false, code: 'PROCESSOR_ERROR', message: intent.message }
+
+  // The key is stable per subscription, so Stripe returns the same intent
+  // every time -- including after it has succeeded. A succeeded intent
+  // cannot mount a PaymentElement, which stranded anybody whose card was
+  // saved and whose activation then failed: every retry handed the browser
+  // a spent intent and the card form refused to load with no explanation.
+  //
+  // If a card is already on it, do not ask for one again. It was collected;
+  // what failed was everything after.
+  if (intent.status === 'succeeded' && intent.paymentMethodRef) {
+    return {
+      ok: true,
+      clientSecret: intent.clientSecret,
+      customerRef,
+      alreadyCollected: true,
+      paymentMethodRef: intent.paymentMethodRef,
+    }
+  }
 
   return { ok: true, clientSecret: intent.clientSecret, customerRef }
 }
@@ -461,6 +491,21 @@ export async function activateSubscription(args: {
   // After the audit row and after the return value is settled, because a
   // notice must never be the reason an activated subscription reports a
   // failure.
+  // The first charge, and until now the only one that sent no receipt.
+  // Settlement emails one for every later cycle; activation is where the
+  // customer actually hands over a card, so it is the receipt that matters
+  // most and it was the one missing.
+  await noticeToCustomer({
+    db,
+    subscriptionId: sub.id,
+    customerUserId: args.actorUserId,
+    now,
+    idempotencyKey: `notify_activation:${sub.id}`,
+    kind: 'cycle.settled',
+    subject: 'Your Count On Local receipt',
+    preview: `${formatCents(chargedCents)} for your first cycle.`,
+  })
+
   await noticeToProviderAndGuardian({
     db,
     providerUserId: sub.providerUserId,

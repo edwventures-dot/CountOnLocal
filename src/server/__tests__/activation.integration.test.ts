@@ -280,6 +280,24 @@ describe('the happy path', () => {
     expect(data![0]!.preview).not.toMatch(/oak|street|@|[0-9]{5}/i)
   })
 
+  it('sends the customer a receipt for the first charge', async () => {
+    // Settlement emails one for every later cycle. Activation is where the
+    // customer actually hands over a card, and it was the one charge that
+    // told them nothing.
+    const subId = await pendingSubscription()
+    await activate(subId)
+
+    const { data } = await admin
+      .from('notifications')
+      .select('preview, recipient_user_id')
+      .eq('kind', 'cycle.settled')
+      .contains('payload', { subscriptionId: subId })
+
+    expect(data).toHaveLength(1)
+    expect(data![0]!.preview).toContain('13.80')
+    expect(data![0]!.recipient_user_id).toBe(customerId)
+  })
+
   it('does not announce the same subscription twice', async () => {
     const subId = await pendingSubscription()
     await activate(subId)

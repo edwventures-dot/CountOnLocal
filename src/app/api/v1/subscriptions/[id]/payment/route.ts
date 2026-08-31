@@ -69,7 +69,11 @@ export async function POST(_request: Request, { params }: Params): Promise<Respo
     // setup on one customer and is useless without the publishable key,
     // which is why it is safe to hand over and the secret key never is.
     clientSecret: result.clientSecret,
-    nextStage: 'confirm_card',
+    // 'charge' means a card was collected on an earlier attempt that did
+    // not finish. Asking for it again is impossible -- the setup intent is
+    // spent -- and unnecessary, because Stripe still has the card.
+    nextStage: result.alreadyCollected ? 'charge' : 'confirm_card',
+    ...(result.paymentMethodRef ? { paymentMethodRef: result.paymentMethodRef } : {}),
   })
 }
 
