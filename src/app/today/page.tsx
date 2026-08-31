@@ -19,6 +19,7 @@ type Stop = {
   valueCents: number
   address: {
     line1: string
+    verified: string | null
     line2: string | null
     city: string
     region: string
@@ -182,7 +183,12 @@ export default async function TodayPage() {
               <Card key={stop.occurrenceId}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                   <h2 style={{ marginBottom: 0 }}>
-                    {stop.position}. {stop.address?.line1 ?? 'Address unavailable'}
+                    {stop.position}.{' '}
+                    {/* The geocoder's version, not the customer's typing.
+                        A prefilled field typed over leaves things like
+                        "1100 Congress Ave..." in line1, and the provider is
+                        the one who has to find the house. */}
+                    {stop.address?.verified ?? stop.address?.line1 ?? 'Address unavailable'}
                   </h2>
                   <span className="small muted">{money(stop.valueCents)}</span>
                 </div>

@@ -350,8 +350,21 @@ export function Checkout({
 
         <div>
           <h2>{p.serviceName}</h2>
-          <p className="muted small" style={{ marginBottom: 0 }}>
-            {p.normalizedAddress}
+          {/* Labelled and changeable, right here.
+              This used to be a bare grey line, and the only way back was a
+              button below the attestation and the pay button -- so somebody
+              who mistyped saw a tidy address they did not recognise as
+              corrected, had no visible way to fix it, and never saw their
+              own entry again. */}
+          <p className="small" style={{ marginBottom: 0 }}>
+            <span className="muted">Going to:</span> <strong>{p.normalizedAddress}</strong>{' '}
+            <button
+              className="btn btn--link"
+              type="button"
+              onClick={() => setStage({ name: 'address' })}
+            >
+              Change
+            </button>
           </p>
         </div>
 

@@ -326,6 +326,54 @@ describe('a provider sees their own route', () => {
     }
   })
 
+  it('shows the geocoder address rather than what the customer typed', async () => {
+    // Found by somebody deliberately mangling a prefilled address field.
+    // They typed "1100 Congress Ave..." over it; the geocoder read that as
+    // "1100 CONGRESS AVE, AUSTIN, TX, 78701"; the review screen showed them
+    // the clean version and the provider's route was handed the dots.
+    //
+    // The provider is the one standing on a street trying to find a house,
+    // so they get the address that was actually verified.
+    const before = await getTodayRoute({
+      db: userScoped(providerA.token),
+      providerUserId: providerA.domainId,
+      now: NOW,
+    })
+    if (!before.ok) throw new Error('route failed')
+    const target = before.route.stops.find((s) => s.address?.line1 === '300 Oak St')
+    if (!target) throw new Error('fixture stop not found')
+
+    const { data: sub } = await admin
+      .from('subscriptions')
+      .select('service_address_id')
+      .eq('id', target.subscriptionId)
+      .single()
+
+    await admin
+      .from('customer_addresses')
+      .update({
+        line1: '300 Oak St...',
+        normalized_address: '300 OAK ST, AUSTIN, TX, 78701',
+      })
+      .eq('id', sub!.service_address_id)
+
+    const r = await getTodayRoute({
+      db: userScoped(providerA.token),
+      providerUserId: providerA.domainId,
+      now: NOW,
+    })
+    if (!r.ok) throw new Error('route failed')
+
+    const mangled = r.route.stops.find((s) => s.address?.line1 === '300 Oak St...')
+    expect(mangled).toBeTruthy()
+    expect(mangled!.address!.verified).toBe('300 OAK ST, AUSTIN, TX, 78701')
+
+    await admin
+      .from('customer_addresses')
+      .update({ line1: '300 Oak St', normalized_address: null })
+      .eq('id', sub!.service_address_id)
+  })
+
   it('carries the subscription id, so the provider can reach the messages', () => {
     // Message threads are keyed by subscription. Without this the provider
     // had no route to a conversation the signed guardian consent says

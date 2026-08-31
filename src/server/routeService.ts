@@ -70,6 +70,13 @@ export type RouteStopView = {
   /** Provider's take for this stop, in cents. */
   valueCents: number
   address: {
+    /**
+     * The address as the geocoder resolved it, when it did.
+     *
+     * This is what a provider should navigate by. line1 below is what the
+     * customer typed, which can be a mangled version of the same house.
+     */
+    verified: string | null
     line1: string
     line2: string | null
     city: string
@@ -135,7 +142,8 @@ export async function getTodayRoute(args: {
          customer_instructions,
          service_details,
          customer_addresses!inner (
-           line1, line2, city, region, postal_code, access_notes, point
+           line1, line2, city, region, postal_code, access_notes, point,
+           normalized_address
          ),
          provider_services!inner (
            businesses!inner ( provider_user_id )
@@ -216,6 +224,7 @@ export async function getTodayRoute(args: {
       region: string
       postal_code: string
       access_notes: string | null
+      normalized_address: string | null
     }>(sub?.customer_addresses as never)
 
     return {
@@ -229,6 +238,19 @@ export async function getTodayRoute(args: {
       valueCents: r.service_value_cents,
       address: addr
         ? {
+            /**
+             * What the geocoder resolved, when it resolved anything.
+             *
+             * The customer's typed line1 is kept beside it but is not what
+             * a provider should navigate by: somebody typing over a
+             * prefilled field left "1100 Congress Ave..." in the database
+             * while the geocoder had already read it as
+             * "1100 CONGRESS AVE, AUSTIN, TX, 78701". The customer saw the
+             * clean version on their receipt screen and the provider was
+             * handed the dirty one -- and the provider is the person
+             * standing on a street trying to find a house.
+             */
+            verified: addr.normalized_address,
             line1: addr.line1,
             line2: addr.line2,
             city: addr.city,
