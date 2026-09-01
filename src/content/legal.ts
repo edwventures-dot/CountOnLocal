@@ -15,6 +15,19 @@
  * marked `needsCounsel` with a note saying what has to be decided. Nothing
  * is invented and nothing is a placeholder pretending to be finished.
  *
+ * ## Counsel review, 2026-09-01
+ *
+ * Revised from the 2026-08-30 draft by outside counsel's review pass, which
+ * corrected the legal entity name, removed three overclaims (that we are
+ * categorically not the employer, that a provider "keeps all of it", that
+ * the customer fee is "the only fee we charge"), reconciled account closure
+ * with the rule the code actually enforces, and turned several factual
+ * sections into explicit counsel questions.
+ *
+ * Two of their edits were not adopted as written, both in "Who else sees
+ * your information", because they described recipients that do not exist.
+ * See the note on that section.
+ *
  * ## Nothing here is in force
  *
  * Every document is `draft`. The page renders a banner saying so, and
@@ -58,15 +71,22 @@ export type LegalDocument = {
   sections: LegalSection[]
 }
 
-/** Kept in one place so three documents cannot disagree about the company. */
-const COMPANY = 'EDW Ventures'
+/**
+ * Kept in one place so three documents cannot disagree about the company.
+ *
+ * Exported because the legal page footer had its own hardcoded copy, which
+ * still read "EDW Ventures" after the 2026-09-01 review corrected the entity
+ * name everywhere else -- so the page naming the operator in its body named
+ * a different company six inches lower. One constant, one name.
+ */
+export const COMPANY = 'EDW Ventures LLC'
 
 const TERMS: LegalDocument = {
   slug: 'terms',
   title: 'Terms of Service',
   summary: 'What Count On Local does, what you agree to, and how money works.',
   status: 'draft',
-  version: 'draft-2026-08-30',
+  version: 'draft-2026-09-01-counsel-review',
   effectiveDate: null,
   sections: [
     {
@@ -74,9 +94,11 @@ const TERMS: LegalDocument = {
       heading: 'What Count On Local is',
       body: [
         `Count On Local is a marketplace operated by ${COMPANY}. It lets a person aged 13 or over offer a small, recurring, outdoor service to households near them — putting bins out, walking a dog, tidying a yard — and lets neighbours subscribe to that service.`,
-        'We are not the employer of the people who provide services, and we do not perform the work. We run the marketplace: the listings, the scheduling, the payments and the safety controls described here and in the Safety Center.',
+        'Count On Local does not perform the work. We run the marketplace: the listings, the scheduling, the payments and the safety controls described here and in the Safety Center.',
         'This is a recurring-service marketplace. There is no open bidding, there are no customer job postings, and there is no way to hire somebody for one-off work except as an addition to a service they already offer.',
       ],
+      needsCounsel:
+        'Determine and supply the legally supportable worker-status language. Do not rely on a contractual label alone. Review the actual marketplace controls, especially the fixed service list, scheduling, no-substitution rule, price cap and account controls, under federal law and each launch state. This review is especially important because providers may be 13 to 17.',
     },
     {
       id: 'who-can-use-it',
@@ -86,16 +108,21 @@ const TERMS: LegalDocument = {
         'Providers must be 13 or over. A provider aged 13 to 17 cannot accept a paying customer until a parent or guardian has connected to their account and given consent, item by item, and signed it with their full legal name.',
         'A provider cannot act as their own guardian. Guardian consent is recorded as a signed, unalterable record.',
       ],
+      needsCounsel:
+        'Confirm whether a 13-to-17-year-old may contract through this structure in each launch state; whether the guardian should become a party to the provider agreement rather than only consent; what terms can be enforced against the minor; and what youth-employment or work-permit restrictions apply if any provider relationship is treated as employment.',
     },
     {
       id: 'prices-and-fees',
       heading: 'Prices, fees and what each side pays',
       body: [
-        'The provider sets their own price and keeps all of it. There is no provider fee and no subscription charge for offering a service.',
-        'Customers pay a platform fee on top of the provider’s price: 15%, with a minimum of $1.00 per billing cycle. This is the only fee we charge.',
+        'The provider sets their own price. Count On Local does not charge providers a platform fee or a subscription charge for offering a service.',
+        'Customers pay a platform fee on top of the provider’s price: 15%, with a minimum of $1.00 per billing cycle.',
         'A single visit cannot be priced above $50.00. A recurring service is billed per cycle, so several visits in one cycle can total more than that — a $35 weekly service billed every four weeks charges $140. What you will be charged each cycle is shown before you subscribe.',
         'All card payments are handled by Stripe. Card details are entered on Stripe’s own systems and Count On Local never sees or stores a card number.',
+        'For a provider aged 13 to 17, payouts are made through the provider’s connected guardian’s Stripe/payment account.',
       ],
+      needsCounsel:
+        'Review payment wording for taxes, refunds, chargebacks, reversals and Stripe/Connect requirements. Confirm the minor-payout structure matches the actual Stripe implementation and state law. The $50 cap is deliberate and is a per-visit product limit, not a statement that a billing cycle cannot exceed $50.',
     },
     {
       id: 'subscriptions',
@@ -105,6 +132,8 @@ const TERMS: LegalDocument = {
         'If a visit does not happen, you are credited for it and the credit reduces the next cycle’s charge. We do not charge a platform fee on a visit that did not happen.',
         'Refunds are issued through the app and can never exceed what was actually charged.',
       ],
+      needsCounsel:
+        'Review the full subscription flow for federal and state negative-option and automatic-renewal requirements, including pre-purchase disclosures, affirmative consent, confirmation, reminders, price or material-term changes, cancellation method and timing. Identify any required product changes separately from Terms wording.',
     },
     {
       id: 'where-we-operate',
@@ -125,6 +154,8 @@ const TERMS: LegalDocument = {
         'Services that involve entering a customer’s home, childcare, driving, ladders, power tools or chemicals are not offered on this platform.',
         'Using Count On Local to arrange work outside these limits, or to move money for something other than a service on the list, is a breach of these terms.',
       ],
+      needsCounsel:
+        'Confirm that the approved service list and these categorical exclusions are sufficient for youth-safety and labor-law purposes in each launch state. Identify any service that needs an age floor above 13, guardian-specific approval, time-of-day restriction, or state restriction.',
     },
     {
       id: 'suspension',
@@ -132,7 +163,7 @@ const TERMS: LegalDocument = {
       body: [
         'We can suspend or close an account that breaches these terms or that presents a safety risk. Decisions are made by a person, recorded with a written reason, and can be appealed.',
         'We do not charge penalties or fines to any user, in any circumstance.',
-        'You can close your own account at any time. Because closure removes your ability to be paid, we ask you to cancel any live subscription and receive any money you are owed first. What happens to your information afterwards is described in the Privacy Notice.',
+        'You can request to close your account at any time. Before closure is completed, we may require live subscriptions to be ended and provider earnings still owed to be paid. What happens to your information afterwards is described in the Privacy Notice.',
       ],
     },
     {
@@ -143,14 +174,14 @@ const TERMS: LegalDocument = {
         'We will look at what happened, and we can issue a credit or a refund.',
       ],
       needsCounsel:
-        'Dispute resolution, arbitration and class-action language, limitation of liability, warranty disclaimers, indemnity, governing law and venue. All of it. Note the multi-state point above before choosing governing-law wording.',
+        'Dispute resolution, arbitration and class-action language, limitation of liability, warranty disclaimers, indemnity, governing law and venue. Review whether any of those provisions require different treatment for minors or guardians. EDW Ventures LLC currently carries no business/liability insurance covering Count On Local; advise whether coverage is required or strongly recommended before launch and whether the public Terms or Safety Center should disclose the insurance position. Note the multi-state point above before choosing governing-law wording.',
     },
     {
       id: 'changes',
       heading: 'Changes to these terms',
       body: [],
       needsCounsel:
-        'How changes are notified, how much notice is given, and what happens to an existing subscription when terms change — particularly where a guardian has consented on behalf of a minor and the terms they consented to have moved.',
+        'How changes are notified, how much notice is given, and what happens to an existing subscription when terms change — particularly where a guardian has consented on behalf of a minor and the terms they consented to have moved. State whether material changes require renewed guardian consent.',
     },
   ],
 }
@@ -160,7 +191,7 @@ const PRIVACY: LegalDocument = {
   title: 'Privacy Notice',
   summary: 'What we hold, how long we keep it, and what happens when you ask us to delete it.',
   status: 'draft',
-  version: 'draft-2026-08-30',
+  version: 'draft-2026-09-01-counsel-review',
   effectiveDate: null,
   sections: [
     {
@@ -175,11 +206,17 @@ const PRIVACY: LegalDocument = {
       id: 'what-we-hold',
       heading: 'What we hold',
       body: [
-        'For everybody: an email address, and a password held by our authentication provider in a form we cannot read.',
+        'For everybody: an email address, and a password held by our hosting provider in a form we cannot read.',
         'For providers: a first name shown publicly, a date of birth that is never shown to anyone, and for a provider under 18, a guardian’s contact details and their signed consent.',
         'For customers: the service address, any access notes such as a gate code, and a record of what was charged.',
         'Card numbers are never held by us. They go directly to Stripe.',
       ],
+      needsCounsel:
+        'Because registration asks for date of birth, review the under-13 rejection flow for COPPA. ' +
+        'Engineering traced this on 2026-09-01 and the answer is partly, which counsel should have before advising. ' +
+        'What is already true: an under-13 date of birth is refused by startProviderOnboarding before any provider profile row is written, so the birth date itself is never stored, and the audit row recording the refusal redacts it. Nothing is sent to analytics, because no analytics vendor exists. ' +
+        'What is not true: the date of birth is asked for after the person has already signed up, so at the moment we learn they are under 13 an authenticated account already exists holding their email address, and nothing deletes it. An audit row keyed to that account also remains. ' +
+        'So the product has actual knowledge of an under-13 user and retains an email address and an audit record for them, with no parental consent. Counsel should say what is required: delete the account outright, retain a minimal blocked-signup marker to stop immediate re-registration with a corrected date, or something else. This is a required code change, not wording.',
     },
     {
       id: 'addresses',
@@ -219,7 +256,7 @@ const PRIVACY: LegalDocument = {
         'Contact details on an account: while the account is in use, and for seven years after it closes or falls completely silent.',
       ],
       needsCounsel:
-        'Approve or change these periods. Product’s position is that it prefers defensible retention over aggressive deletion. The seven-year figure is the ordinary US business-records expectation and is the number most likely to be wrong, particularly for money held on behalf of a minor.',
+        'Approve or change these periods. Product’s position is that it prefers defensible retention over aggressive deletion. Review state privacy-law requirements, litigation/safety holds, payment-record requirements, and records involving minors. If any record may legally or operationally be retained without a fixed end date, change the opening sentence so the public notice does not promise the opposite.',
     },
     {
       id: 'deletion',
@@ -227,28 +264,29 @@ const PRIVACY: LegalDocument = {
       body: [
         'You can close your account from your account page. Before you confirm, we show you exactly what will be removed and exactly what will be kept, and why.',
         'We do not claim to erase everything, because we cannot and should not. What goes immediately: your contact details, your display name, your addresses including the map coordinates, records of notifications we sent you, your completion photos, and messages you sent.',
-        'What stays: financial records, the audit log, safety reports, account decisions, and guardian consent — each for its retention period. These carry an account reference rather than your name, and once your account details are removed they no longer identify you.',
-        'Two things we will not do: erase a message that has been reported about your conduct, and close an account while money is still owed to you or a subscription is still running. The second protects you — it is your money, and for a provider aged 13 to 17 it is a minor’s money held in a guardian’s account.',
+        'What stays: financial records, the audit log, safety reports, account decisions, and guardian consent — each for its retention period. Direct account identifiers are removed where possible, while retained records remain associated with an internal account reference.',
+        'Two things we will not do: erase a message that has been reported about your conduct, and complete account closure while money is still owed to you or a subscription is still running. The second protects you — it is your money, and for a provider aged 13 to 17 it is paid through the connected guardian’s Stripe/payment account.',
       ],
       needsCounsel:
-        'Whether any applicable deletion right overrides refusing closure while earnings are unpaid or a subscription is live, and whether records created while a provider was a minor need different treatment once that provider turns 18.',
+        'Whether any applicable deletion right overrides refusing closure while earnings are unpaid or a subscription is live; whether retained records remain personal information under applicable law even after direct identifiers are removed; and whether records created while a provider was a minor need different treatment once that provider turns 18.',
     },
     {
       id: 'sharing',
       heading: 'Who else sees your information',
       body: [
-        'Stripe, to take payments and to pay providers. Our email provider, to send you messages. Our hosting and database providers, to run the service.',
-        'We do not sell your information.',
+        'Stripe, to take payments and to pay providers. Our email provider, to send you messages. Our hosting provider, which also runs our database and holds the passwords used to sign in.',
+        'We do not sell your information. We do not currently send your information to an analytics provider.',
       ],
       needsCounsel:
-        'The full subprocessor list with each one named, international transfer position, state-specific privacy rights and how they are exercised, cookie disclosure, and the retention wording that pairs with the periods above.',
+        'The full subprocessor list with each one named, international transfer position, state-specific privacy rights and how they are exercised, cookie/tracking disclosure, sale/share/targeted-advertising definitions if applicable, and the retention wording that pairs with the periods above. ' +
+        'Two changes from the 2026-09-01 review were not adopted, because both named a recipient that does not exist. There is no analytics provider: the analytics boundary in src/server/analytics.ts runs NullSink, which drops every event, and no vendor has been chosen. Authentication is not a separate company — it is Supabase, the same vendor as hosting and the database — so listing it separately implied a fourth party. If an analytics vendor is added before launch, this section and the sentence denying one must change in the same commit.',
     },
     {
       id: 'contact',
       heading: 'Contacting us about your information',
       body: [],
       needsCounsel:
-        'The contact route for privacy requests, who is responsible, and the response time committed to.',
+        'The EDW Ventures LLC contact route for privacy requests, who is responsible, required identity-verification process, and the response timing required or promised.',
     },
   ],
 }
@@ -258,7 +296,7 @@ const SAFETY: LegalDocument = {
   title: 'Safety Center',
   summary: 'What we check, what we do not check, and how to report a problem.',
   status: 'draft',
-  version: 'draft-2026-08-30',
+  version: 'draft-2026-09-01-counsel-review',
   effectiveDate: null,
   sections: [
     {
@@ -282,6 +320,8 @@ const SAFETY: LegalDocument = {
         'A provider cannot be their own guardian.',
         'Where you see “Guardian connected”, a guardian has genuinely completed that process. An adult provider with no guardian does not show that badge.',
       ],
+      needsCounsel:
+        'Confirm the legal role of the guardian, whether guardian consent should also constitute contractual acceptance, and whether any launch state requires a higher minimum age, work permit, parental authorization form, hour restriction or task restriction.',
     },
     {
       id: 'what-work-is-allowed',
@@ -294,7 +334,7 @@ const SAFETY: LegalDocument = {
     },
     {
       id: 'listings',
-      heading: 'A young provider’s page is private by default',
+      heading: 'A young provider’s page is unlisted by default',
       body: [
         'A minor’s service page is reachable by a direct link or a QR code — that is how it is meant to be shared, with neighbours the family chooses.',
         'It is not listed or indexed. Search engines are told not to index it until a guardian separately consents to a public listing, and that consent can be withdrawn.',
@@ -315,25 +355,32 @@ const SAFETY: LegalDocument = {
       body: [
         'Anyone can report a safety concern from their dashboard, at any time.',
         'This works even if your account has been suspended. Somebody suspended last week who sees something dangerous today still needs to be able to say so, and the report is usually about somebody else.',
-        'Reports are read by people, not by an automated system.',
+        'Reports are read by people at EDW Ventures LLC, not by an automated system.',
       ],
     },
     {
       id: 'consequences',
       heading: 'What happens after a report',
       body: [
-        'Accounts can receive a strike, be suspended, or be banned. Every one of those is a decision made by a person with a written reason attached, and the history is permanent.',
+        'Accounts can receive a strike, be suspended, or be banned. Every one of those is a decision made by a person with a written reason attached, and the decision history is retained as described in our Privacy Notice.',
         'Strikes never suspend an account automatically. A third strike raises it to a human, who decides.',
         'A suspended account cannot take any action on the platform, but can still read its own pages and can still file a safety report.',
         'We never impose a financial penalty on anybody.',
       ],
     },
     {
+      id: 'insurance',
+      heading: 'Insurance',
+      body: [],
+      needsCounsel:
+        'EDW Ventures LLC currently carries no business/liability insurance covering Count On Local. Advise whether coverage is legally required or commercially prudent before launch, what limits/types are appropriate for a marketplace involving minors and household services, and whether users should receive an explicit no-platform-insurance disclosure.',
+    },
+    {
       id: 'emergency',
       heading: 'If somebody is in danger',
       body: [],
       needsCounsel:
-        'Emergency guidance, the mandatory-reporting position and who holds it, escalation route and response commitments, and what we tell a guardian and when. This section must not go out with our words in it — it is the one page somebody reads in the worst moment.',
+        'Emergency guidance, the mandatory-reporting position and who holds it, escalation route and response commitments, and what we tell a guardian and when. Safety reports are reviewed by a person at EDW Ventures LLC. This section must not go out with our words in it — it is the one page somebody reads in the worst moment.',
     },
   ],
 }

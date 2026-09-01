@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { LegalDocument } from '@/content/legal'
-import { LEGAL_DOCUMENTS } from '@/content/legal'
+import { COMPANY, LEGAL_DOCUMENTS } from '@/content/legal'
 
 /**
  * One rendering for all three legal documents.
@@ -93,7 +93,7 @@ export function LegalFooter() {
           </Link>
         ))}
       </nav>
-      <p>Count On Local is a product of EDW Ventures.</p>
+      <p>Count On Local is a product of {COMPANY}.</p>
     </footer>
   )
 }

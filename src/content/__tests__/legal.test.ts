@@ -205,3 +205,43 @@ describe('the draft is honest about being a draft', () => {
     }
   })
 })
+
+describe('the sharing section names recipients that exist', () => {
+  /**
+   * The 2026-09-01 counsel review added "Our analytics provider, to measure
+   * product use" to the Privacy Notice. There is no analytics provider: the
+   * sink in src/server/analytics.ts defaults to NullSink, which drops every
+   * event, and no vendor has been chosen.
+   *
+   * A privacy notice naming a recipient that does not exist is a false
+   * statement in the one document where a false statement is most expensive
+   * — and it is the unusual direction of the mistake, which is why it was
+   * easy to accept on the way past.
+   *
+   * So the denial stays only while it is true. The moment somebody writes a
+   * real sink, this fails and the sentence has to be reconsidered in the
+   * same change rather than six months later.
+   */
+  it('denies an analytics provider only while there genuinely is not one', async () => {
+    const sharing = legalDocument('privacy')!.sections.find((s) => s.id === 'sharing')!
+    const text = sharing.body.join(' ')
+    if (!/not currently send your information to an analytics provider/i.test(text)) return
+
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync('src/server/analytics.ts', 'utf8')
+    const implementations = [...source.matchAll(/class\s+(\w+)\s+implements\s+AnalyticsSink/g)].map(
+      (m) => m[1],
+    )
+
+    // NullSink drops; StubSink is for tests. A third one is a real vendor.
+    expect(implementations.sort()).toEqual(['NullSink', 'StubSink'])
+  })
+
+  it('does not name authentication as a separate company from hosting', () => {
+    // It is Supabase in both cases. Two names for one vendor reads as two
+    // vendors, and a subprocessor list is exactly where that misleads.
+    const privacy = legalDocument('privacy')!
+    const text = privacy.sections.flatMap((s) => s.body).join(' ')
+    expect(text).not.toMatch(/authentication provider/i)
+  })
+})
