@@ -1,0 +1,22 @@
+-- Records what the payment processor kept.
+--
+-- Until now the ledger had no way to say that Stripe took a cut, so it
+-- did not say it. A cycle posted customer_charge +1380, provider_earning
+-- -1200 and platform_fee -180, summed to zero, and looked complete --
+-- while the platform's real share was smaller than -180 by whatever Stripe
+-- deducted. platformRevenueCents summed platform_fee and called the result
+-- "revenue recognised", so every number the platform had about its own
+-- income was gross while being labelled net.
+--
+-- The provider's side was never affected and is not affected here: rule 5
+-- is that the provider keeps the listed price, and a processor fee comes
+-- out of the platform's share, not theirs.
+--
+-- The fee is posted as a balanced pair (processor_fee negative, platform_fee
+-- positive) so the per-subscription zero-sum survives. See
+-- processorFeeEntries in src/domain/ledger.ts.
+--
+-- Adding a value to an enum cannot run inside a transaction block on older
+-- PostgreSQL, and `if not exists` makes the migration re-runnable.
+
+alter type ledger_kind add value if not exists 'processor_fee';

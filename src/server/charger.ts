@@ -130,6 +130,26 @@ export type FindTransferResult =
   /** The question could not be answered. Never treated as "no transfer". */
   | { ok: false; message: string }
 
+export type ChargeFeeRequest = {
+  /** The charge or payment intent the fee was taken on. */
+  externalId: string
+}
+
+export type ChargeFeeResult =
+  /** The processor has settled and this is what it kept. */
+  | { ok: true; state: 'settled'; feeCents: number; currency: string }
+  /**
+   * The charge exists but the processor has not said what it took yet.
+   *
+   * A normal condition, not a fault: the balance transaction is created
+   * when the charge settles, which is not always the moment it succeeds.
+   * Distinct from an error so reconciliation can leave it alone and ask
+   * again rather than recording a zero fee, which would be a lie that
+   * never corrects itself.
+   */
+  | { ok: true; state: 'pending' }
+  | { ok: false; message: string }
+
 export type TransferResult =
   | { ok: true; processor: string; externalId: string }
   /**
@@ -178,6 +198,14 @@ export interface Charger {
    * what makes a fresh idempotency key per attempt safe.
    */
   findTransfer(request: FindTransferRequest): Promise<FindTransferResult>
+  /**
+   * What did the processor actually keep on this charge?
+   *
+   * Asked by reconciliation rather than by the charge path. The number is
+   * not known when the money moves, and nobody at the keyboard is waiting
+   * for it -- see processorFeeEntries in src/domain/ledger.ts.
+   */
+  chargeFee(request: ChargeFeeRequest): Promise<ChargeFeeResult>
 }
 
 export class StripeCharger implements Charger {
@@ -308,6 +336,39 @@ export class StripeCharger implements Charger {
     }
   }
 
+  async chargeFee(request: ChargeFeeRequest): Promise<ChargeFeeResult> {
+    try {
+      // The fee lives on the balance transaction, two hops from the payment
+      // intent: intent -> latest_charge -> balance_transaction. Expanded in
+      // one call rather than three round trips.
+      const intent = await stripe().paymentIntents.retrieve(request.externalId, {
+        expand: ['latest_charge.balance_transaction'],
+      })
+
+      const charge = intent.latest_charge
+      if (!charge || typeof charge === 'string') return { ok: true, state: 'pending' }
+
+      const balance = charge.balance_transaction
+      // A string means it exists but was not expanded; null means the
+      // charge has not settled. Neither is an error and neither is a zero
+      // fee, so both wait for the next run.
+      if (!balance || typeof balance === 'string') return { ok: true, state: 'pending' }
+
+      return {
+        ok: true,
+        state: 'settled',
+        // Already integer minor units. Stripe reports fees in the same
+        // currency as the charge for a single-currency account, which is
+        // what V1 is; a currency mismatch is caught by the caller.
+        feeCents: balance.fee,
+        currency: balance.currency.toUpperCase(),
+      }
+    } catch (err) {
+      const e = err as { message?: string }
+      return { ok: false, message: e.message ?? 'Could not read the processor fee.' }
+    }
+  }
+
   async transfer(request: TransferRequest): Promise<TransferResult> {
     try {
       const transfer = await stripe().transfers.create(
@@ -433,6 +494,22 @@ export class StubCharger implements Charger {
   async findTransfer(request: FindTransferRequest): Promise<FindTransferResult> {
     if (this.findOutcome) return this.findOutcome
     return { ok: true, externalId: this.existingTransfers.get(request.groupRef) ?? null }
+  }
+
+  readonly feeRequests: ChargeFeeRequest[] = []
+  private feeOutcome: ChargeFeeResult | ((r: ChargeFeeRequest) => ChargeFeeResult) | undefined
+
+  setFeeOutcome(outcome: ChargeFeeResult | ((r: ChargeFeeRequest) => ChargeFeeResult)): void {
+    this.feeOutcome = outcome
+  }
+
+  async chargeFee(request: ChargeFeeRequest): Promise<ChargeFeeResult> {
+    this.feeRequests.push(request)
+    if (typeof this.feeOutcome === 'function') return this.feeOutcome(request)
+    // Default is pending rather than a fee: a test that has not said what
+    // the processor took should not silently get a number, and pending is
+    // the state that changes nothing.
+    return this.feeOutcome ?? { ok: true, state: 'pending' }
   }
 
   async transfer(request: TransferRequest): Promise<TransferResult> {

@@ -8,6 +8,9 @@ import {
   isBalanced,
   payoutEntry,
   platformRevenueCents,
+  processorFeeEntries,
+  processorFeeKey,
+  processorFeesCents,
   providerBalanceCents,
   sumCents,
 } from '../ledger'
@@ -321,5 +324,78 @@ describe('multi-provider isolation', () => {
     expect(providerBalanceCents(forA)).toBe(1200)
     expect(providerBalanceCents(forB)).toBe(1200)
     expect(sumCents(all)).toBe(0)
+  })
+})
+
+describe('the processor takes its cut out of the platform, not the provider', () => {
+  const CHARGE = chargeEntries({ ...IDS, quote: PRD_QUOTE, idempotencyKey: 'k1' })
+  const FEE = processorFeeEntries({
+    feeCents: 70,
+    subscriptionId: IDS.subscriptionId,
+    customerUserId: IDS.customerUserId,
+    providerUserId: IDS.providerUserId,
+    externalId: 'pi_1',
+    idempotencyKey: processorFeeKey({ externalId: 'pi_1' }),
+  })
+
+  it('stays balanced on its own, so the per-subscription zero survives', () => {
+    // The property the whole ledger rests on. A single unbalanced -70 would
+    // have broken it for every charge in the system.
+    expect(sumCents(FEE)).toBe(0)
+    expect(isBalanced(FEE)).toBe(true)
+    expect(isBalanced([...CHARGE, ...FEE])).toBe(true)
+  })
+
+  it('leaves the provider exactly as owed as before -- rule 5', () => {
+    // The provider keeps the listed price. A processor fee that touched
+    // provider_earning would quietly break the one promise the product
+    // makes about money to the person doing the work.
+    expect(providerBalanceCents(CHARGE)).toBe(1200)
+    expect(providerBalanceCents([...CHARGE, ...FEE])).toBe(1200)
+  })
+
+  it('leaves what the customer paid alone', () => {
+    const paid = [...CHARGE, ...FEE]
+      .filter((e) => e.kind === 'customer_charge')
+      .reduce((a, e) => a + e.amountCents, 0)
+    expect(paid).toBe(1380)
+  })
+
+  it('turns gross platform revenue into net, which was the bug', () => {
+    // Before: 180, reported as "revenue recognised", with Stripe's cut
+    // nowhere in the system. After: 110, which is what the platform keeps.
+    expect(platformRevenueCents(CHARGE)).toBe(180)
+    expect(platformRevenueCents([...CHARGE, ...FEE])).toBe(110)
+    expect(processorFeesCents([...CHARGE, ...FEE])).toBe(70)
+  })
+
+  it('still exposes the gross fee, because both numbers are real', () => {
+    const all = [...CHARGE, ...FEE]
+    expect(platformRevenueCents(all) + processorFeesCents(all)).toBe(180)
+  })
+
+  it('keys on the processor charge id so reconciliation can re-run', () => {
+    expect(processorFeeKey({ externalId: 'pi_1' })).toBe('procfee:pi_1')
+    const keyed = FEE.filter((e) => e.idempotencyKey)
+    expect(keyed).toHaveLength(1)
+    expect(keyed[0]?.kind).toBe('processor_fee')
+  })
+
+  it('writes nothing for a genuinely free charge', () => {
+    expect(
+      processorFeeEntries({ feeCents: 0, subscriptionId: 's', idempotencyKey: 'k' }),
+    ).toHaveLength(0)
+  })
+
+  it('refuses a pre-signed fee rather than guessing what was meant', () => {
+    expect(() =>
+      processorFeeEntries({ feeCents: -70, subscriptionId: 's', idempotencyKey: 'k' }),
+    ).toThrow(RangeError)
+  })
+
+  it('refuses fractional cents', () => {
+    expect(() =>
+      processorFeeEntries({ feeCents: 70.5, subscriptionId: 's', idempotencyKey: 'k' }),
+    ).toThrow(TypeError)
   })
 })

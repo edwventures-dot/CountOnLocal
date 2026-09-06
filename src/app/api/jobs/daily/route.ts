@@ -66,6 +66,7 @@ import { runPayouts } from '@/server/payoutService'
 import { dispatchNotifications, setNotifier } from '@/server/notifications'
 import { ResendNotifier, resendConfigFromEnv } from '@/server/resendNotifier'
 import { runRetention } from '@/server/retentionJob'
+import { runProcessorFeeReconciliation } from '@/server/processorFeeJob'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
 
@@ -81,6 +82,7 @@ type JobName =
   | 'pay-out'
   | 'age-out'
   | 'referral-rewards'
+  | 'processor-fees'
   | 'notify'
   | 'retention'
 
@@ -92,6 +94,7 @@ const JOBS: readonly JobName[] = [
   'pay-out',
   'age-out',
   'referral-rewards',
+  'processor-fees',
   'notify',
   'retention',
 ]
@@ -177,6 +180,15 @@ export async function GET(request: Request): Promise<Response> {
   // the same pass.
   await run('age-out', () => runAgeOut({ db, now }))
   await run('referral-rewards', () => runReferralRewards({ db, now }))
+  // After settlement, so the cycle charged in this same pass is reconciled
+  // rather than waiting a day. Stripe usually has the balance transaction
+  // within seconds, and anything still pending is picked up tomorrow --
+  // which is why the job records nothing rather than a zero for those.
+  //
+  // Nothing downstream reads the result, so its position is about
+  // freshness, not correctness: the books are gross until it runs and
+  // exact afterwards.
+  await run('processor-fees', () => runProcessorFeeReconciliation({ db }))
   // Last, so anything the earlier jobs queued goes out in the same run
   // rather than waiting four hours.
   // Installed here rather than at import time: this is the only place that

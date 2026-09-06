@@ -72,6 +72,7 @@ export type LedgerKindEnum =
   | 'dispute'
   | 'payout'
   | 'adjustment'
+  | 'processor_fee'
 
 export type BusinessStateEnum =
   | 'draft'

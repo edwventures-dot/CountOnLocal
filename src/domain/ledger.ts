@@ -53,6 +53,7 @@ export type LedgerKind =
   | 'dispute'
   | 'payout'
   | 'adjustment'
+  | 'processor_fee'
 
 export type LedgerEntry = {
   kind: LedgerKind
@@ -323,10 +324,122 @@ export function providerBalanceCents(entries: readonly LedgerEntry[]): number {
   return owed <= 0 ? 0 : owed
 }
 
-/** Platform revenue recognised, in cents. Fees are stored negative. */
+/**
+ * Platform revenue recognised, in cents. Fees are stored negative.
+ *
+ * This is NET of what the processor took, and it becomes so without a
+ * special case: processorFeeEntries posts the processor's cut as a negative
+ * processor_fee and a matching POSITIVE platform_fee, because the money
+ * comes out of the platform's share and nobody else's. Summing platform_fee
+ * therefore nets automatically, the same way a credited visit's giveback
+ * already nets here.
+ *
+ * Gross fee income -- what the customer was quoted, before the processor --
+ * is `platformRevenueCents(entries) + processorFeesCents(entries)`, or the
+ * quote on the subscription. Both numbers are worth having and they are not
+ * the same number, which was the whole problem: until processor_fee existed
+ * there was only the gross one and it was labelled as revenue.
+ */
 export function platformRevenueCents(entries: readonly LedgerEntry[]): number {
   const revenue = -sumCents(entries.filter((e) => e.kind === 'platform_fee'))
   return revenue === 0 ? 0 : revenue
+}
+
+/** What the payment processor kept, in cents. Positive. */
+export function processorFeesCents(entries: readonly LedgerEntry[]): number {
+  const fees = -sumCents(entries.filter((e) => e.kind === 'processor_fee'))
+  return fees <= 0 ? 0 : fees
+}
+
+/**
+ * The processor's cut of one charge.
+ *
+ * ## Why this is two entries and not one
+ *
+ * Stripe takes its fee out of the platform's balance, not the customer's
+ * payment and not the provider's earnings. Rule 5 is that the provider
+ * keeps the listed price; a processor fee that reduced provider_earning
+ * would quietly break it, and one that reduced customer_charge would claim
+ * the customer paid less than they did.
+ *
+ * So the money moves from the platform's share to the processor:
+ *
+ *     processor_fee   -70   Stripe kept this
+ *     platform_fee    +70   out of what the platform was holding
+ *     ------------------------
+ *     sum               0
+ *
+ * The per-subscription zero survives, which matters: it is the property
+ * that makes "did every cent get accounted for" answerable. A single
+ * unbalanced -70 would have broken it for every charge in the system.
+ *
+ * A positive platform_fee already means "the platform gives its cut back"
+ * -- creditEntries posts one for a visit that did not happen. This is the
+ * same shape with a different counterparty.
+ *
+ * ## Why it is posted separately from the charge
+ *
+ * The fee is not known when the charge is made. It lives on the balance
+ * transaction, which can be pending, and fetching it inside the charge path
+ * would put a second network call and a second failure mode between the
+ * customer and their subscription for a number nobody is waiting on.
+ *
+ * So the charge posts gross and stays tied to the quote, and this pair is
+ * posted later by reconciliation, once the processor says what it actually
+ * took. Until then the books are knowably gross rather than wrong by an
+ * unknown amount.
+ */
+export function processorFeeEntries(args: {
+  /** What the processor kept. Positive; the sign is applied here. */
+  feeCents: number
+  subscriptionId: string
+  customerUserId?: string | undefined
+  providerUserId?: string | undefined
+  currency?: string | undefined
+  externalProcessor?: string | undefined
+  /** The charge the fee was taken on, so a row can be traced back to it. */
+  externalId?: string | undefined
+  idempotencyKey: string
+}): LedgerEntry[] {
+  assertWholeCents('feeCents', args.feeCents)
+  if (args.feeCents < 0) throw new RangeError('Pass a positive fee; the sign is applied here')
+  if (args.feeCents === 0) return []
+
+  const common = {
+    currency: args.currency ?? 'USD',
+    subscriptionId: args.subscriptionId,
+    customerUserId: args.customerUserId,
+    providerUserId: args.providerUserId,
+    externalProcessor: args.externalProcessor,
+    externalId: args.externalId,
+  }
+
+  return [
+    {
+      ...common,
+      kind: 'processor_fee',
+      amountCents: -args.feeCents,
+      // Only one row carries the key; the column is unique across the table.
+      idempotencyKey: args.idempotencyKey,
+      memo: 'Payment processor fee',
+    },
+    {
+      ...common,
+      kind: 'platform_fee',
+      amountCents: args.feeCents,
+      memo: 'Processor fee, out of the platform fee',
+    },
+  ]
+}
+
+/**
+ * Idempotency key for a charge's processor fee.
+ *
+ * Keyed on the processor's own charge id, so reconciliation can run as
+ * often as it likes and the unique index refuses the second insert.
+ */
+export function processorFeeKey(args: { externalId: string }): string {
+  return `procfee:${args.externalId}`
 }
 
 /**
