@@ -282,7 +282,11 @@ describe('closing an account', () => {
     for (const r of effect.retained) {
       expect(r.because.length, r.class).toBeGreaterThan(20)
     }
-    expect(effect.retained.map((r) => r.class)).toContain('ledger_entry')
+    // Was ledger_entry: the financial record that could not be erased
+    // because removing one side of a balanced pair breaks it for everybody
+    // else on it. No money moves through this product, so the record that
+    // survives closure for that reason is the safety one.
+    expect(effect.retained.map((r) => r.class)).toContain('incident')
   })
 
   it('is idempotent: closing twice does not fail or re-close', async () => {
