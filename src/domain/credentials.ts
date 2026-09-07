@@ -176,6 +176,31 @@ export function interpretSignupError(raw: string): SignupOutcome {
     }
   }
 
+  // The invite gate refusing an address that is not in the pilot.
+  //
+  // Migration 0043 raises PILOT_NOT_INVITED from a trigger on auth.users,
+  // and Supabase does not pass a trigger's message through -- the client
+  // sees only "Database error creating new user". So this matches on the
+  // generic wording, which is the only signal available.
+  //
+  // The default sentence below is worse than useless here: "please try
+  // again" is advice that can never work, and a neighbour who mistyped
+  // their address would keep retrying a spelling that will always fail.
+  //
+  // It states the pilot condition generally rather than confirming
+  // anything about the address that was typed. That is a smaller version
+  // of the same hole this function exists to close, and it is deliberate:
+  // for a fifteen-house pilot, "is my neighbour on Trey's list" is a very
+  // cheap thing to learn, and an error nobody can act on is expensive
+  // every single time it happens.
+  if (message.includes('database error') && message.includes('user')) {
+    return {
+      kind: 'retry',
+      message:
+        'We could not create that account. Count On Local is running a small invited pilot right now, so if you have not been invited yet, that will be why.',
+    }
+  }
+
   // Anything else, including messages we have never seen. Showing the
   // processor's own wording is how the enumeration hole reopens the next
   // time they add an error case.

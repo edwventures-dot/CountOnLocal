@@ -146,6 +146,22 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['platform_settings']['Insert']>
         Relationships: []
       }
+      pilot_invites: {
+        Row: {
+          email: string
+          note: string | null
+          invited_at: string
+          redeemed_at: string | null
+        }
+        Insert: {
+          email: string
+          note?: string | null
+          invited_at?: string
+          redeemed_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['pilot_invites']['Insert']>
+        Relationships: []
+      }
       users: {
         Row: {
           id: string

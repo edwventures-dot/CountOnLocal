@@ -194,3 +194,39 @@ describe('the post-sign-in redirect cannot leave the site', () => {
     expect(safeNextPath('/\n//evil.example')).toBe(DEFAULT_LANDING)
   })
 })
+
+describe('the invite gate refusing somebody who was not invited', () => {
+  /**
+   * Migration 0043 raises PILOT_NOT_INVITED from a trigger on auth.users.
+   * Supabase does not pass a trigger's message through -- this is the
+   * literal string the browser gets, captured from a live refusal:
+   */
+  const SUPABASE_TRIGGER_REFUSAL = 'Database error creating new user'
+
+  it('does not tell them to try again, which could never work', () => {
+    // The default branch says "please try again". For an address that is
+    // not on the list, that is advice guaranteed to fail every time, and a
+    // neighbour who mistyped would keep retrying the same spelling.
+    const outcome = interpretSignupError(SUPABASE_TRIGGER_REFUSAL)
+    expect(outcome.message).not.toMatch(/try again/i)
+  })
+
+  it('says a pilot is running, so the reason is actionable', () => {
+    const outcome = interpretSignupError(SUPABASE_TRIGGER_REFUSAL)
+    expect(outcome.message).toMatch(/invited pilot/i)
+  })
+
+  it('still refuses to confirm anything about the address that was typed', () => {
+    // The whole point of this function. It may say the pilot exists; it
+    // may not say whether this particular person is on the list.
+    const outcome = interpretSignupError(SUPABASE_TRIGGER_REFUSAL)
+    expect(outcome.message).not.toMatch(/your (email|address) is not/i)
+    expect(outcome.message).not.toMatch(/not on the list/i)
+  })
+
+  it('leaves an already-registered address collapsing into the notice', () => {
+    // Regression guard: the new branch must not swallow the case this
+    // function was originally written for.
+    expect(interpretSignupError('User already registered').kind).toBe('confirm')
+  })
+})

@@ -22,8 +22,22 @@ import { COMPANY, LEGAL_DOCUMENTS } from '@/content/legal'
  *
  * When counsel delivers, `needsCounsel` goes away and the note disappears
  * with it. Nothing here needs changing.
+ *
+ * ## Why the banner has two versions
+ *
+ * The original said "no one can sign up yet". That was true while the
+ * pre-launch gate 404'd every route, and it becomes FALSE the moment the
+ * first invited neighbour creates an account -- a false sentence sitting
+ * under a banner promising the page describes what the product actually
+ * does, on the one page where being wrong is most expensive.
+ *
+ * So during an invited pilot it says what is true instead: people are
+ * using this, the document is still a draft, and a draft is a statement of
+ * intent rather than an agreement they have entered into. `pilot` is
+ * passed in rather than read here so the three route files stay the only
+ * things that touch the environment.
  */
-export function LegalPage({ doc }: { doc: LegalDocument }) {
+export function LegalPage({ doc, pilot = false }: { doc: LegalDocument; pilot?: boolean }) {
   const isDraft = doc.status === 'draft'
 
   return (
@@ -48,11 +62,21 @@ export function LegalPage({ doc }: { doc: LegalDocument }) {
       {isDraft ? (
         <div className="legal__banner" role="note">
           <strong>This is a draft and is not in force.</strong>
-          <p>
-            Count On Local has not launched and no one can sign up yet. This page is published so
-            the wording can be reviewed against what the product actually does. Nothing on it
-            creates an agreement, and sections still being written are marked below.
-          </p>
+          {pilot ? (
+            <p>
+              Count On Local has not launched publicly. A small number of invited people are using
+              it in one neighbourhood while the wording on this page is still being reviewed
+              against what the product actually does. Sections still being written are marked
+              below — until they are finished and this document is in force, it is a description
+              of how we intend to behave rather than an agreement you have entered into.
+            </p>
+          ) : (
+            <p>
+              Count On Local has not launched and no one can sign up yet. This page is published so
+              the wording can be reviewed against what the product actually does. Nothing on it
+              creates an agreement, and sections still being written are marked below.
+            </p>
+          )}
         </div>
       ) : null}
 
