@@ -45,7 +45,7 @@ describe('the shape of the policy, which is not a proposal', () => {
   it('keeps safety and financial records longer than ordinary ones', () => {
     // The one relationship the spec states outright.
     const ordinary = RETENTION.message_ordinary.days
-    for (const c of ['ledger_entry', 'audit_log', 'incident', 'consent_record'] as const) {
+    for (const c of ['audit_log', 'incident', 'consent_record'] as const) {
       expect(RETENTION[c].days, c).toBeGreaterThan(ordinary)
     }
   })
@@ -70,7 +70,7 @@ describe('what a deletion request actually does', () => {
     // A person asking to be forgotten cannot take the money with them, and
     // somebody who was reported must not be able to remove the report.
     const retained = deletionEffect().retained.map((r) => r.class)
-    for (const c of ['ledger_entry', 'audit_log', 'incident', 'account_action'] as const) {
+    for (const c of ['audit_log', 'incident', 'account_action'] as const) {
       expect(retained, c).toContain(c)
     }
   })
@@ -113,7 +113,7 @@ describe('what a deletion request actually does', () => {
   it('does not claim a sweep for records that only hold a user id', () => {
     // Nothing in a ledger entry names anybody. Listing it as swept would
     // describe work no code does.
-    for (const c of ['ledger_entry', 'audit_log', 'incident', 'account_action'] as const) {
+    for (const c of ['audit_log', 'incident', 'account_action'] as const) {
       expect(RETENTION[c].mechanism, c).toBe('via_account')
     }
   })

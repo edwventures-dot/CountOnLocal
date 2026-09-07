@@ -107,21 +107,7 @@ describe('claims the product cannot back', () => {
 })
 
 describe('facts that must match the code', () => {
-  it('states the price cap as a per-visit figure with the real number', () => {
-    const terms = legalDocument('terms')!
-    const fees = terms.sections.find((s) => s.id === 'prices-and-fees')!.body.join(' ')
-    const dollars = `$${(MAX_OCCURRENCE_PRICE_CENTS / 100).toFixed(2)}`
 
-    expect(fees).toContain(dollars)
-    // The cap is per visit and the page has to say so — the previous rule
-    // capped the cycle total and the two read almost identically.
-    expect(fees).toMatch(/single visit/i)
-  })
-
-  it('does not claim a cycle total is capped', () => {
-    // It is not, since 2026-08-30. A $35 weekly service bills $140.
-    expect(allText).not.toMatch(/\$50[^.]{0,40}(per|a|each) (cycle|month)/i)
-  })
 
   it('states retention periods that match the policy', () => {
     const privacy = legalDocument('privacy')!
@@ -141,7 +127,7 @@ describe('facts that must match the code', () => {
     expect(RETENTION.notification.days).toBe(90)
     expect(retention).toMatch(/ninety days/i)
 
-    expect(RETENTION.ledger_entry.days).toBe(365 * 7)
+    expect(RETENTION.audit_log.days).toBe(365 * 7)
     expect(retention).toMatch(/seven years/i)
   })
 
@@ -154,11 +140,27 @@ describe('facts that must match the code', () => {
     expect(text).toMatch(/what stays/i)
   })
 
-  it('describes a minor listing as reachable but not indexed', () => {
-    const listings = legalDocument('safety')!.sections.find((s) => s.id === 'listings')!
-    const text = listings.body.join(' ')
-    expect(text).toMatch(/direct link|QR/i)
-    expect(text).toMatch(/not (listed|indexed)/i)
+  it('says plainly that nothing is charged through the product', () => {
+    // The single most load-bearing fact on this branch. If it ever stops
+    // being true, every other page is wrong too.
+    const money = legalDocument('terms')!.sections.find((s) => s.id === 'money')!
+    const text = money.body.join(' ')
+    expect(text).toMatch(/never takes payment/i)
+    expect(text).toMatch(/no card on file/i)
+  })
+
+  it('makes no claim about anybody being under 18', () => {
+    // Minors were the whole shape of the old documents. A sentence left
+    // behind describing guardian consent would be describing a product
+    // that no longer exists.
+    for (const doc of LEGAL_DOCUMENTS) {
+      for (const section of doc.sections) {
+        for (const paragraph of section.body) {
+          expect(paragraph, `${doc.slug}/${section.id}`).not.toMatch(/guardian/i)
+          expect(paragraph, `${doc.slug}/${section.id}`).not.toMatch(/13 to 17|minor/i)
+        }
+      }
+    }
   })
 })
 

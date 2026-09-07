@@ -82,7 +82,6 @@ export type RetentionClass =
   | 'completion_photo'
   | 'customer_address'
   | 'notification'
-  | 'ledger_entry'
   | 'audit_log'
   | 'consent_record'
   | 'incident'
@@ -223,17 +222,6 @@ export const RETENTION: Readonly<Record<RetentionClass, RetentionRule>> = {
     clock: 'the notification being queued',
     reason:
       'Operational records of what was sent. Useful for answering "did they ever get the email" and worthless after a season.',
-  },
-  ledger_entry: {
-    days: LONG_RETENTION_DAYS,
-    atExpiry: 'de_identify',
-    onRequest: 'retain',
-    mechanism: 'via_account',
-    clock: 'the entry being written',
-    reason:
-      'Financial records, including money held on behalf of a minor and paid to a guardian. Kept as long as the books must be reconstructable.',
-    retainedBecause:
-      'The ledger balances to zero on every movement. Removing one side of a pair breaks that for every other party to it.',
   },
   audit_log: {
     days: LONG_RETENTION_DAYS,
