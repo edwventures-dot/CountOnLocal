@@ -155,9 +155,10 @@ export function AddressCheck({ providerServiceId }: { providerServiceId: string 
             Carries only the service id. The address the customer just
             typed is deliberately NOT put in the URL -- it would end up in
             history, in a referrer header and in any log that records a
-            path. Checkout asks for it again behind a sign-in.
+            path. It is handed over in sessionStorage instead, which never
+            leaves the tab -- see lib/addressHandoff.
           */}
-          <a href={`/checkout/${providerServiceId}`} style={S.subscribe}>
+          <a href={`/subscribe/${providerServiceId}`} style={S.subscribe}>
             Subscribe
           </a>
         </div>

@@ -233,37 +233,34 @@ export async function previewCheckout(args: {
 // ---------------------------------------------------------------------------
 
 export const createSubscriptionSchema = previewSchema.extend({
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  /**
-   * UX_UI_SPEC section 13. Optional, and a bad one never fails the
-   * checkout -- see attachReferral. Length is checked but the alphabet is
-   * not, because rejecting on shape here would turn a typo into a
-   * validation error on a form field the customer cannot fix by retyping
-   * the code they were actually given.
-   */
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  /** Anything the provider needs to know. "Bins are round the side." */
   customerInstructions: z.string().trim().max(500).optional(),
+  /**
+   * Per-category safety details. Required for dog services -- the
+   * attestation the customer signs promises them.
+   */
+  serviceDetails: z.record(z.string(), z.unknown()).optional(),
   /**
    * The itemized customer attestation, from the legal pass.
    *
-   * A list of acknowledged item keys plus a typed name, replacing the
-   * single `attestation: { acknowledgedItems: ['is_adult','no_background_checks','provider_may_be_minor','accurate_address_and_dog','messaging','not_emergency_service'], typedName: 'Test Customer' }` boolean. The boolean could record that
-   * somebody clicked; it could not record WHAT they were told, which is
-   * the entire point of an attestation that says Count On Local runs no
-   * background checks.
+   * A list of acknowledged item keys plus a typed name, rather than a
+   * single boolean. A boolean could record that somebody clicked; it could
+   * not record WHAT they were told, which is the entire point of an
+   * attestation saying Count On Local runs no background checks and does
+   * not handle the money.
    *
    * Validated against domain/consent.ts and stored as a signed record.
    */
-  /**
-   * Per-category safety details. Required for dog services -- the
-   * attestation the customer signs promises them, and until now there was
-   * nowhere to put them.
-   */
-  serviceDetails: z.record(z.string(), z.unknown()).optional(),
   attestation: z.object({
     acknowledgedItems: z.array(z.string().max(64)).min(1).max(32),
     typedName: z.string().trim().min(3).max(120),
   }),
 })
+
 export type CreateSubscriptionInput = z.infer<typeof createSubscriptionSchema>
 
 export type CreateSubscriptionResult =
@@ -272,13 +269,7 @@ export type CreateSubscriptionResult =
       subscriptionId: string
       state: 'active'
       startDate: string
-          occurrenceCount: number
-      /** Absent when no code was supplied. */
-      /**
-       * True when this is an abandoned checkout being picked up rather than
-       * a subscription just created. Nothing was inserted.
-       */
-      resumed?: boolean
+      occurrenceCount: number
     }
   | {
       ok: false
@@ -308,16 +299,17 @@ export type CreateSubscriptionResult =
     }
 
 /**
- * Creates a pending subscription and its first horizon of occurrences.
+ * Creates the subscription and its first horizon of occurrences.
  *
- * `pending` rather than `active`: no money has moved yet. The subscription
- * becomes active when a payment method is attached and the first cycle is
- * charged, which keeps a half-finished checkout from putting a stranger on
- * a teenager's route.
+ * Active immediately. In the full product this was `pending` until a card
+ * cleared, and the gap between the two states was where abandoned
+ * checkouts accumulated -- a subscription that existed, had never been paid
+ * for, and could not be reached from anywhere. Nothing has to clear here,
+ * so the state does not exist and neither does the dead end.
  *
- * Everything is re-checked here rather than trusted from the preview the
- * customer saw. Between preview and confirm a route can fill up, a guardian
- * can revoke, or a provider can unpublish.
+ * Everything is re-checked rather than trusted from the preview the
+ * customer saw. Between looking and confirming, a route can fill up or a
+ * provider can unpublish.
  */
 export async function createSubscription(args: {
   db: Db
@@ -536,15 +528,10 @@ export async function createSubscription(args: {
   if (subError || !subscription) {
     if (subError?.code === '23505') {
       // ux_one_live_subscription counts 'pending' as live, which is right
-      // for stopping a double-submit and wrong for the case that actually
-      // happens: somebody reaches the card step, closes the tab, and comes
-      // back. Their subscription exists, has never been paid for, and
-      // cannot be reached from anywhere -- so "you already have this
-      // service at that address" is a dead end they cannot leave.
-      //
-      // A pending row with no payment method is an abandoned checkout, not
-      // a subscription. Hand it back so the caller can finish paying for
-      // it. Anything further along genuinely is a duplicate.
+      // A genuine duplicate. The unique index that produced this covers
+      // (customer, service, address) across the live states, which is what
+      // stops a second Subscribe click billing somebody twice -- and here,
+      // what stops it putting two identical stops on a provider's round.
       return { ok: false, code: 'ALREADY_SUBSCRIBED' }
     }
     console.error('[subscribe] subscription write failed', subError?.message)
@@ -589,10 +576,11 @@ export async function createSubscription(args: {
   // The attestation, recorded against the subscription it was given for.
   //
   // After the subscription exists so the record can point at it, and
-  // before the referral so a failure here stops the checkout -- an
-  // attestation is not optional garnish, it is the thing the customer was
-  // told about background checks. A subscription without one is a
-  // subscription nobody can prove was informed.
+  // before anything else, because a failure here has to stop the whole
+  // thing. An attestation is not optional garnish: it is the record of
+  // what the customer was told about background checks and about who
+  // handles the money. A subscription without one is a subscription
+  // nobody can prove was informed.
   const attested = await recordConsent({
     db,
     kind: 'customer_attestation',

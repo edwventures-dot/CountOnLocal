@@ -76,9 +76,18 @@ export default async function GrowPage() {
             with people you and your family already know.
           </p>
           <CopyLink url={dashboard.shareUrl} />
+          {/*
+            This said the link "carries your referral code, so a signup that
+            starts here is credited to you". Credited to what? Referral
+            rewards were paid in money and there is no money, so nothing was
+            being credited to anybody. The code itself survives as plain
+            attribution -- it tells the provider which share brought somebody
+            in -- and saying that is both true and more useful than a promise
+            of a reward that does not exist.
+          */}
           {dashboard.referralCode ? (
             <p className="small muted">
-              It carries your referral code, so a signup that starts here is credited to you.
+              It carries a code of yours, so you can see which shares brought people in.
             </p>
           ) : null}
         </Card>

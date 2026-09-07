@@ -109,14 +109,21 @@ function unitLabel(unit: string): string {
 }
 
 /**
- * The billing cadence is shown separately from the price. PRD section 12:
- * a $3/week service billed every 4 weeks must say both, so nobody is
- * surprised by a $12 charge they thought was $3.
+ * What the price adds up to over a cycle.
+ *
+ * This said "Billed $12.00 every 4 weeks, plus platform fee", which was
+ * true of a product that billed people and charged a fee. Nothing here
+ * bills anybody and there is no fee, so it was two false claims in one
+ * sentence on the page a stranger sees first.
+ *
+ * The arithmetic is still worth showing. PRD section 12's reasoning holds
+ * whoever collects the money: somebody agreeing to $3 a week should see
+ * what a month of it comes to before they agree.
  */
 function cadenceLine(priceCents: number, unit: string, cycleWeeks: number): string | null {
   if (unit !== 'week') return null
   const perCycle = priceCents * cycleWeeks
-  return `Billed ${formatMoney(perCycle)} every ${cycleWeeks} weeks, plus platform fee`
+  return `About ${formatMoney(perCycle)} every ${cycleWeeks} weeks, paid to them directly`
 }
 
 function scheduleLine(rule: Record<string, unknown>): string | null {
@@ -197,7 +204,15 @@ export default async function Storefront({ params }: Params) {
               ) : business.public_trust_badge === 'identity_verified' ? (
                 <span style={S.badgeGreen}>Identity verified</span>
               ) : null}
-              <span style={S.badge}>Payments handled securely</span>
+              {/*
+                "Payments handled securely" used to sit here. No payment is
+                handled at all now, securely or otherwise, and a trust badge
+                for a thing the product does not do is the exact shape rule
+                10 exists to prevent. What replaces it is the true version,
+                which is also the more useful one -- a customer needs to
+                know this before they subscribe, not after.
+              */}
+              <span style={S.badge}>You pay them directly</span>
               {business.public_area_label ? (
                 <span style={S.badge}>Serving {business.public_area_label}</span>
               ) : null}
