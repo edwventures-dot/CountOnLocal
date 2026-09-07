@@ -8,7 +8,6 @@
  *
  *   - the provider who did the work;
  *   - the customer on that subscription;
- *   - the guardian of a minor provider, where the relationship lets them
  *     see operations at all;
  *   - staff handling an incident.
  *
@@ -25,7 +24,6 @@
 
 import { sanitisePhoto } from '@/domain/photo'
 import { hasPermission } from '@/domain/roles'
-import { isGuardianCleared, type GuardianState } from '@/domain/guardian'
 import { writeAudit } from '@/server/audit'
 import type { Role } from '@/domain/roles'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -121,98 +119,6 @@ export type FetchResult =
   | { ok: true; bytes: Uint8Array; contentType: string }
   | { ok: false; code: 'NOT_FOUND' | 'NOT_ALLOWED'; message: string }
 
-/**
- * Serves a photo, to somebody entitled to it.
- *
- * A caller who is not entitled gets NOT_FOUND rather than a refusal. The
- * existence of a photo for a particular visit is itself information, and
- * "you may not see this" confirms there is something there.
- */
-export async function fetchCompletionPhoto(args: {
-  db: Db
-  photoId: string
-  viewerUserId: string
-  viewerRoles: readonly Role[]
-}): Promise<FetchResult> {
-  const { data: photo } = await args.db
-    .from('completion_photos')
-    .select(
-      `id, storage_path, content_type, subscription_id,
-       subscriptions!inner (
-         customer_user_id,
-         provider_services!inner ( businesses!inner ( provider_user_id ) )
-       )`,
-    )
-    .eq('id', args.photoId)
-    .maybeSingle()
-
-  if (!photo) return { ok: false, code: 'NOT_FOUND', message: 'Not found.' }
-
-  const subscription = one<{ customer_user_id: string; provider_services: unknown }>(
-    photo.subscriptions,
-  )
-  const providerUserId = providerOf(photo)
-
-  const allowed =
-    subscription?.customer_user_id === args.viewerUserId ||
-    providerUserId === args.viewerUserId ||
-    hasPermission(args.viewerRoles, 'incident:manage') ||
-    (await isGuardianOf(args.db, args.viewerUserId, providerUserId))
-
-  if (!allowed) {
-    // Same answer as a photo that does not exist.
-    return { ok: false, code: 'NOT_FOUND', message: 'Not found.' }
-  }
-
-  const { data: blob, error } = await args.db.storage.from(BUCKET).download(photo.storage_path)
-  if (error || !blob) {
-    console.error('[photo] download failed', error?.message)
-    return { ok: false, code: 'NOT_FOUND', message: 'Not found.' }
-  }
-
-  // Staff access to somebody's photo is worth a row. The parties to the
-  // job are not audited for looking at their own visit.
-  if (
-    hasPermission(args.viewerRoles, 'incident:manage') &&
-    subscription?.customer_user_id !== args.viewerUserId &&
-    providerUserId !== args.viewerUserId
-  ) {
-    await writeAudit({
-      actorUserId: args.viewerUserId,
-      actorRole: 'trust_safety_agent',
-      action: 'photo.viewed_by_staff',
-      targetType: 'completion_photo',
-      targetId: args.photoId,
-      after: { subscription_id: photo.subscription_id },
-    })
-  }
-
-  return {
-    ok: true,
-    bytes: new Uint8Array(await blob.arrayBuffer()),
-    contentType: photo.content_type,
-  }
-}
-
-async function isGuardianOf(
-  db: Db,
-  viewerUserId: string,
-  providerUserId: string | null,
-): Promise<boolean> {
-  if (!providerUserId) return false
-
-  const { data: rel } = await db
-    .from('guardian_relationships')
-    .select('state')
-    .eq('guardian_user_id', viewerUserId)
-    .eq('provider_user_id', providerUserId)
-    .maybeSingle()
-
-  // The same clearance that governs the rest of the guardian's view. A
-  // guardian who has not been verified sees that work exists, not the
-  // photographs taken at somebody's front door.
-  return Boolean(rel && isGuardianCleared(rel.state as GuardianState))
-}
 
 function one<T>(value: unknown): T | undefined {
   return (Array.isArray(value) ? value[0] : value) as T | undefined

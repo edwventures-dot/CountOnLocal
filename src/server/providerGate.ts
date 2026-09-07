@@ -1,19 +1,17 @@
 /**
  * Loading the facts a provider gate needs.
  *
- * domain/gates.ts decides; this fetches. The two values that matter are the
- * authoritative date of birth and the stored guardian state, and both come
- * from provider_profiles rather than from anything a request could supply.
- * CLAUDE.md rule 2: guardian state is a real state machine, and the age it
- * is checked against is derived from the DOB every time rather than read
- * from a cached band that could be stale by a birthday.
+ * domain/gates.ts decides; this fetches. There is very little left to
+ * fetch: the gate used to need an authoritative date of birth and a stored
+ * guardian state, and now it needs to know only that a provider profile
+ * exists at all. Kept as its own function anyway, because the seam between
+ * "what is true" and "what that means" is the thing that made these
+ * decisions testable, and collapsing it would be a step backwards for the
+ * sake of four lines.
  */
 
-import { parsePlainDate, type PlainDate } from '@/domain/age'
-import type { GuardianState } from '@/domain/guardian'
 import type { ProviderGateContext } from '@/domain/gates'
 import type { Role } from '@/domain/roles'
-import { civilDateIn } from '@/server/occurrenceJobs'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
@@ -32,20 +30,17 @@ export async function loadProviderGateContext(args: {
   /** Zone the calendar date is resolved in. UTC unless a route supplies one. */
   timezone?: string | undefined
 }): Promise<ProviderGateContext | null> {
+  // Only that a profile exists. The gate used to need a date of birth and
+  // a guardian state; with every provider an adult it needs neither, and
+  // reading a birth date to then ignore it would be collecting something
+  // for nothing.
   const { data: profile } = await args.db
     .from('provider_profiles')
-    .select('date_of_birth, guardian_state')
+    .select('user_id')
     .eq('user_id', args.providerUserId)
     .maybeSingle()
 
   if (!profile) return null
 
-  const today: PlainDate = civilDateIn(args.timezone ?? 'UTC', args.now)
-
-  return {
-    roles: args.roles,
-    dateOfBirth: parsePlainDate(profile.date_of_birth),
-    guardianState: profile.guardian_state as GuardianState,
-    today,
-  }
+  return { roles: args.roles }
 }

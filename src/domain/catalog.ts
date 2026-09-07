@@ -9,10 +9,22 @@
  * SAFETY_TRUST_POLICY section 5 gives the concrete example: a provider must
  * not be able to turn `manual yard cleanup` into `chainsaw tree trimming`
  * through a description.
+ *
+ * ## What the age rules became
+ *
+ * The full product decided this from a date of birth, a guardian state and
+ * a per-category guardian approval, because a 14-year-old and a 17-year-old
+ * could offer different things. Every provider is an adult here, so all
+ * three inputs collapse and what remains is the part that was always doing
+ * the real work: the tier and whether the row is active.
+ *
+ * minProviderAge and guardianExplicitApproval stay on the type because the
+ * catalog rows in the database still carry them. They are read and ignored
+ * rather than deleted, so a future branch that puts minors back does not
+ * have to reconstruct a column.
  */
 
-import type { AgeBand } from './age'
-import { isGuardianCleared, type GuardianState } from './guardian'
+
 
 export type RiskTier = 'A' | 'B' | 'C' | 'X'
 
@@ -27,55 +39,22 @@ export type CatalogService = {
   active: boolean
 }
 
-export type OfferDenial =
-  | 'SERVICE_NOT_AVAILABLE'
-  | 'PROVIDER_TOO_YOUNG'
-  | 'ADULT_ONLY_CATEGORY'
-  | 'GUARDIAN_APPROVAL_REQUIRED'
-  | 'CATEGORY_NOT_APPROVED_BY_GUARDIAN'
+export type OfferDenial = 'SERVICE_NOT_AVAILABLE'
 
 export type OfferDecision = { allowed: true } | { allowed: false; code: OfferDenial }
 
 /**
- * May this provider offer this catalog service?
+ * May a provider offer this catalog service?
  *
- * Age is passed as completed years rather than a band, because a catalog
- * entry may set a minimum above 13 and the band alone cannot answer that.
+ * Tier X is prohibited outright and should never be active, but checking
+ * only `active` would let a mistakenly-active row through -- so both are
+ * checked, the same way they were before.
  */
-export function canOfferService(args: {
-  service: CatalogService
-  ageInYears: number
-  band: AgeBand
-  guardianState: GuardianState
-  /** Catalog codes the guardian has explicitly approved for this provider. */
-  guardianApprovedCodes: readonly string[]
-}): OfferDecision {
-  const { service, ageInYears, band, guardianState, guardianApprovedCodes } = args
+export function canOfferService(args: { service: CatalogService }): OfferDecision {
+  const { service } = args
 
-  // Tier X is prohibited outright and should never be active, but an
-  // inactive-check alone would let a mistakenly-active row through.
   if (service.riskTier === 'X' || !service.active) {
     return { allowed: false, code: 'SERVICE_NOT_AVAILABLE' }
-  }
-
-  if (service.riskTier === 'C' && band !== 'adult') {
-    return { allowed: false, code: 'ADULT_ONLY_CATEGORY' }
-  }
-
-  if (ageInYears < service.minProviderAge) {
-    return { allowed: false, code: 'PROVIDER_TOO_YOUNG' }
-  }
-
-  if (band === 'minor') {
-    if (!isGuardianCleared(guardianState)) {
-      return { allowed: false, code: 'GUARDIAN_APPROVAL_REQUIRED' }
-    }
-    // Tier B needs approval of this category specifically, not just general
-    // guardian consent -- a parent who agreed to bin service has not thereby
-    // agreed to their child walking strangers' dogs.
-    if (service.guardianExplicitApproval && !guardianApprovedCodes.includes(service.code)) {
-      return { allowed: false, code: 'CATEGORY_NOT_APPROVED_BY_GUARDIAN' }
-    }
   }
 
   return { allowed: true }

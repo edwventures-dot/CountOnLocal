@@ -6,19 +6,20 @@
  * future UI cannot publish by satisfying a different set of checks than the
  * API enforces.
  *
- * The ordering matters: safety before completeness. A minor without a
- * verified guardian is told that first, rather than being walked through
- * filling in a service area they are not yet allowed to publish.
+ * ## Two blockers went away
+ *
+ * There used to be a safety check before everything else -- a minor with no
+ * verified guardian was told that first, rather than being walked through
+ * filling in a service area they were not allowed to publish -- and a money
+ * check after it, because publishing a page that cannot take payment wastes
+ * the provider's flyer run and the customer's time.
+ *
+ * Neither applies now. Nobody needs a guardian and nothing takes payment,
+ * so what is left is completeness: does this business actually describe a
+ * service somebody could turn up for.
  */
 
-import type { AgeBand } from './age'
-import { isGuardianCleared, type GuardianState } from './guardian'
-import { isPayoutReady, type StripeAccountState } from './payout'
-
 export type PublishBlocker =
-  | 'PROVIDER_INELIGIBLE'
-  | 'GUARDIAN_APPROVAL_REQUIRED'
-  | 'PAYOUT_ONBOARDING_INCOMPLETE'
   | 'NO_ACTIVE_SERVICE'
   | 'SERVICE_MISSING_AREA'
   | 'SERVICE_MISSING_SCHEDULE'
@@ -34,9 +35,6 @@ export type ServiceReadiness = {
 }
 
 export type PublishInput = {
-  band: AgeBand
-  guardianState: GuardianState
-  account: StripeAccountState
   businessState: string
   publicAreaLabel: string | null
   services: readonly ServiceReadiness[]
@@ -56,18 +54,8 @@ export type PublishDecision =
 export function publishBlockers(input: PublishInput): PublishBlocker[] {
   const blockers: PublishBlocker[] = []
 
-  if (input.band === 'under_min_age') return ['PROVIDER_INELIGIBLE']
-
   if (input.businessState === 'published') return ['ALREADY_PUBLISHED']
 
-  // Safety first.
-  if (!isGuardianCleared(input.guardianState)) blockers.push('GUARDIAN_APPROVAL_REQUIRED')
-
-  // Then money: publishing a page that cannot take payment wastes the
-  // provider's flyer run and the customer's time.
-  if (!isPayoutReady(input.account)) blockers.push('PAYOUT_ONBOARDING_INCOMPLETE')
-
-  // Then completeness.
   const active = input.services.filter((s) => s.state === 'active')
   if (active.length === 0) {
     blockers.push('NO_ACTIVE_SERVICE')

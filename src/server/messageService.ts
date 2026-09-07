@@ -23,7 +23,6 @@ import {
   retentionDaysFor,
   type ViolationCode,
 } from '@/domain/messaging'
-import { classifyAge, parsePlainDate } from '@/domain/age'
 import { writeAudit } from '@/server/audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
@@ -100,13 +99,10 @@ export async function ensureThread(args: {
     .eq('user_id', biz.provider_user_id)
     .maybeSingle()
 
-  const involvesMinor = profile
-    ? classifyAge(parsePlainDate(profile.date_of_birth), {
-        year: args.now.getUTCFullYear(),
-        month: args.now.getUTCMonth() + 1,
-        day: args.now.getUTCDate(),
-      }) === 'minor'
-    : false
+  // Always false: every provider is an adult on this branch. Kept as a
+  // variable rather than removed so the stricter-controls code path below
+  // stays present and testable, instead of being deleted and rebuilt.
+  const involvesMinor = false
 
   if (existing) {
     // Keep the flag current -- a provider turning 18 between messages

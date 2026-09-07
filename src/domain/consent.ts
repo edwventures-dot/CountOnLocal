@@ -22,10 +22,18 @@
  * keeps which items were checked, so "they agreed" can be answered per
  * point rather than as one boolean.
  *
+ * ## No guardian consent on this branch
+ *
+ * The guardian consent document and the public-listing consent that went
+ * with it are gone, along with everything else about minors. Both sides
+ * attest to being adults and nothing collects a date of birth -- see
+ * PROVIDER_ATTESTATION below for why that is a deliberate design choice
+ * rather than a simplification.
+ *
  * Source copy: marketing/legal/consent-and-attestations.md
  */
 
-export type ConsentKind = 'guardian_consent' | 'public_listing_consent' | 'customer_attestation'
+export type ConsentKind = 'provider_attestation' | 'customer_attestation'
 
 export type ConsentItem = {
   /** Stable across wording changes. The record stores these. */
@@ -54,93 +62,57 @@ export type ConsentDocument = {
  * particular teenager, so two guardians signing the same version produce
  * the same hash and a change of wording is visible as a change of hash.
  */
-export const GUARDIAN_CONSENT: ConsentDocument = {
-  kind: 'guardian_consent',
-  version: '2026-08-28.2',
-  title: 'Guardian consent',
-  intro:
-    "You're being asked to let {{minor_name}} run a small local service business through Count On Local. Please read each point and check the box to confirm you understand it.",
+/**
+ * What a provider confirms before listing a service.
+ *
+ * ## Why this is an attestation and not a date of birth
+ *
+ * The full product asked for a date of birth, because the age bands
+ * genuinely mattered: under 13 refused, 13-17 gated on a guardian, 18+
+ * independent. With minors gone there is one band, and the only question
+ * is whether somebody is an adult.
+ *
+ * Asking for a birth date to answer a yes/no question would be worse than
+ * useless here. FTC guidance is explicit that an operator who asks for and
+ * receives a date of birth showing a user is under 13 has actual knowledge
+ * of that fact for COPPA purposes -- so collecting it on a public site
+ * creates an obligation that not collecting it does not. The full product
+ * carried exactly that gap: an under-13 signup was refused, but only after
+ * an account already existed holding their email.
+ *
+ * An attestation answers the question, keeps the answer, and never learns
+ * anything it would then have to protect.
+ */
+export const PROVIDER_ATTESTATION: ConsentDocument = {
+  kind: 'provider_attestation',
+  version: '2026-09-07.1',
+  title: 'Before you list a service',
+  intro: 'Please read each point and check the box to confirm you understand it.',
   items: [
+    { key: 'is_adult', text: 'I am 18 or older.' },
     {
-      key: 'earns_money',
-      text: '{{minor_name}} will run a business and earn money. They set a price and keep 100% of it. The customer pays Count On Local a small platform fee on top.',
-    },
-    {
-      key: 'guardian_holds_payouts',
-      text: 'I hold the money until they turn 18. Because {{minor_name}} is under 18, the payout account is in my name and I receive and oversee the payouts until they turn 18.',
-    },
-    {
-      key: 'address_sharing',
-      text: "{{minor_name}} may go to a customer's address to do the work. After someone subscribes, Count On Local shares that customer's service address with {{minor_name}} — and with me — so the work can happen. The work is outdoor, approved tasks only.",
-    },
-    {
-      key: 'messaging',
-      text: 'There is an in-app messaging system. {{minor_name}} can exchange messages with adult customers inside Count On Local, tied to a job. It has blocking and reporting and stricter controls for minors — but I understand this communication exists.',
+      key: 'own_arrangement',
+      text: 'I understand Count On Local does not employ me, pay me, or take a cut. Whatever I charge is between me and my customer, and I arrange payment with them directly.',
     },
     {
       key: 'no_background_checks',
-      text: 'Count On Local does NOT run background checks — on anyone. "Identity verified" means only that a payment identity was confirmed through Stripe. Count On Local vets no one. This is a tool for neighbors who already know and trust each other, and choosing who my teen works with is my responsibility, not Count On Local\'s.',
+      text: 'I understand Count On Local does NOT run background checks on anyone, including my customers.',
     },
     {
-      key: 'private_by_default',
-      text: "{{minor_name}}'s listing is PRIVATE by default. It can be reached only by a link or QR code we choose to share. It will not appear in public search unless I separately sign a Public Listing Consent — and even then it shows only business info, never a home address, school, birth date, or last name.",
-    },
-    {
-      key: 'approved_tasks_only',
-      text: 'My teen may only offer approved outdoor tasks — trash cans to the curb, dog walking, yard cleanup, watering, exterior car wash, and similar. They may not use ladders, power tools, or chemicals, may not enter anyone\'s home, and may not do childcare, driving, or any prohibited work.',
-    },
-    {
-      key: 'personally_does_the_work',
-      text: 'My teen must personally do the work. Sending someone else in their place (a friend or sibling) is not allowed and can get the account banned.',
-    },
-    {
-      key: 'photos_and_reviews',
-      text: 'My teen can add a photo when they finish a job, and customers can leave public reviews. Location data is removed from photos before they are stored, and only my teen, the customer and I can see them; reviews build a public reputation.',
-    },
-    {
-      key: 'revocable',
-      text: 'I can withdraw this consent at any time. If I do, the business is paused immediately, no new customers can subscribe, and future charges stop. Work already paid for is handed to support to resolve safely.',
+      key: 'my_own_safety',
+      text: 'I am responsible for deciding which work I take and whether it is safe for me to do it.',
     },
     {
       key: 'not_emergency_service',
-      text: "I've read the Safety Center, and I know Count On Local is not an emergency service. In an emergency I will call local emergency services (911). I know how to report a concern.",
+      text: 'I understand Count On Local is not an emergency service.',
     },
   ],
-  statement:
-    'I am the parent or legal guardian of {{minor_name}}. I have read and understood each point above. I consent to {{minor_name}} operating a business through Count On Local under these terms.',
-}
-
-export const PUBLIC_LISTING_CONSENT: ConsentDocument = {
-  kind: 'public_listing_consent',
-  version: '2026-08-28.1',
-  title: 'Public listing consent',
-  intro:
-    'By default {{minor_name}} can only be reached by a link or QR code you share. This makes their business findable in Count On Local search.',
-  items: [
-    {
-      key: 'understands_default',
-      text: 'I understand that by default my teen is reachable only by the link or QR code we share.',
-    },
-    {
-      key: 'chooses_public',
-      text: "I choose to make my teen's business listing appear in Count On Local's public search.",
-    },
-    {
-      key: 'business_info_only',
-      text: 'I understand the public listing shows business info only — never a home address, school, birth date, last name, or exact schedule.',
-    },
-    {
-      key: 'revocable',
-      text: 'I understand I can turn this off at any time, which removes the listing from search.',
-    },
-  ],
-  statement:
-    "I consent to {{minor_name}}'s business listing appearing in Count On Local's public search.",
+  statement: 'I agree to each of the points above.',
 }
 
 export const CUSTOMER_ATTESTATION: ConsentDocument = {
   kind: 'customer_attestation',
-  version: '2026-08-28.2',
+  version: '2026-09-07.1',
   title: 'Before you subscribe',
   intro: 'Please read each point and check the box to confirm you understand it.',
   items: [
@@ -150,8 +122,8 @@ export const CUSTOMER_ATTESTATION: ConsentDocument = {
       text: 'I understand Count On Local does NOT run background checks. I am choosing to hire someone in my neighborhood I know and trust; vetting them is my responsibility.',
     },
     {
-      key: 'provider_may_be_minor',
-      text: 'I understand the provider may be a teenager (13–17) whose parent or legal guardian has approved their business.',
+      key: 'pay_the_provider_directly',
+      text: 'I understand Count On Local does not take payment. I pay my provider directly, and what I owe them is between us.',
     },
     {
       key: 'accurate_address_and_dog',
@@ -170,10 +142,10 @@ export const CUSTOMER_ATTESTATION: ConsentDocument = {
 }
 
 export const CONSENT_DOCUMENTS: Readonly<Record<ConsentKind, ConsentDocument>> = {
-  guardian_consent: GUARDIAN_CONSENT,
-  public_listing_consent: PUBLIC_LISTING_CONSENT,
+  provider_attestation: PROVIDER_ATTESTATION,
   customer_attestation: CUSTOMER_ATTESTATION,
 }
+
 
 /**
  * The exact bytes that get hashed.

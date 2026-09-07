@@ -36,14 +36,11 @@ import {
   type ReleasableOccurrence,
   type SubscriptionState,
 } from '@/domain/subscription'
-import { creditEntries, standingCreditCents, visitFeeShareCents, type LedgerEntry } from '@/domain/ledger'
-import { quoteCycle, type PriceUnit } from '@/domain/money'
 import type { SkipPolicy } from '@/domain/credit'
+import type { PriceUnit } from '@/domain/pricing'
 import type { OccurrenceState } from '@/domain/occurrence'
-import { writeBalancedEntries } from '@/server/ledgerWriter'
 import { parseServiceDate } from '@/server/occurrenceService'
 import { civilDateIn } from '@/server/occurrenceJobs'
-import { getCharger } from '@/server/charger'
 import { writeAudit } from '@/server/audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
@@ -126,29 +123,11 @@ async function load(db: Db, subscriptionId: string): Promise<Loaded | null> {
 }
 
 /** Ledger rows for a subscription, in the domain's shape. */
-async function ledgerFor(db: Db, subscriptionId: string): Promise<LedgerEntry[]> {
-  const { data } = await db
-    .from('ledger_entries')
-    .select('kind, amount_cents')
-    .eq('subscription_id', subscriptionId)
-  return (data ?? []).map((r) => ({
-    kind: r.kind,
-    amountCents: r.amount_cents,
-    currency: 'USD',
-  })) as LedgerEntry[]
-}
 
 async function releasableOccurrences(
   db: Db,
   sub: Loaded,
 ): Promise<{ occurrences: ReleasableOccurrence[]; feeShare: number }> {
-  const cycleQuote = quoteCycle({
-    priceCents: sub.pricing.priceCents,
-    priceUnit: sub.pricing.priceUnit,
-    billingCycleWeeks: sub.pricing.billingCycleWeeks,
-    fee: { percentBasisPoints: sub.pricing.feeBps, minimumCents: sub.pricing.feeMinCents },
-  })
-
   const { data } = await db
     .from('service_occurrences')
     .select('id, state, service_date, service_value_cents')
@@ -159,18 +138,10 @@ async function releasableOccurrences(
     state: o.state as OccurrenceState,
     serviceDate: parseServiceDate(o.service_date),
     valueCents: o.service_value_cents,
-    feeShareCents: visitFeeShareCents({
-      cycleFeeCents: cycleQuote.platformFeeCents,
-      visitValueCents: o.service_value_cents,
-      cycleSubtotalCents: cycleQuote.serviceSubtotalCents,
-    }),
+    feeShareCents: 0,
   }))
 
-  const feeShare = visitFeeShareCents({
-    cycleFeeCents: cycleQuote.platformFeeCents,
-    visitValueCents: sub.pricing.priceCents,
-    cycleSubtotalCents: cycleQuote.serviceSubtotalCents,
-  })
+  const feeShare = 0
 
   return { occurrences, feeShare }
 }
@@ -201,14 +172,13 @@ export async function previewEnding(args: {
   }
 
   const { occurrences } = await releasableOccurrences(args.db, sub)
-  const ledger = await ledgerFor(args.db, sub.id)
 
   return {
     ok: true,
     plan: planEnding({
       occurrences,
       today: civilDateIn(sub.timezone, args.now),
-      standingCreditCents: standingCreditCents(ledger),
+      standingCreditCents: 0,
       ending: args.ending,
       ...(args.policy ? { policy: args.policy } : {}),
     }),
@@ -242,12 +212,11 @@ async function endSubscription(args: {
 
   const today = civilDateIn(sub.timezone, now)
   const { occurrences } = await releasableOccurrences(db, sub)
-  const before = await ledgerFor(db, sub.id)
 
   const plan = planEnding({
     occurrences,
     today,
-    standingCreditCents: standingCreditCents(before),
+    standingCreditCents: 0,
     ending,
     ...(args.policy ? { policy: args.policy } : {}),
   })
@@ -263,118 +232,20 @@ async function endSubscription(args: {
       .eq('id', occ.id)
       .in('state', ['scheduled', 'due_today'])
 
-    if (release.credit.credited && release.credit.amountCents > 0) {
-      await writeBalancedEntries({
-        db,
-        entries: creditEntries({
-          serviceCents: release.credit.amountCents,
-          feeShareCents: occ.feeShareCents,
-          subscriptionId: sub.id,
-          occurrenceId: occ.id,
-          customerUserId: sub.customerUserId,
-          providerUserId: sub.providerUserId,
-          memo: `${ending}:${release.credit.code}`,
-          idempotencyKey: `credit:${occ.id}`,
-        }),
-      })
-    }
+    // The credit used to post three ledger entries here. Nothing does now:
+    // no money went through the platform, so releasing a visit is a state
+    // change and nothing more. `release.credit` still says whether the
+    // visit counts against what the customer owes, which is the part the
+    // two of them settle between themselves.
   }
 
-  // --- Move the subscription --------------------------------------------
-  const { error: stateError } = await db
-    .from('subscriptions')
-    .update({
-      state: target,
-      ...(ending === 'cancel' ? { canceled_at: now.toISOString() } : {}),
-    })
-    .eq('id', sub.id)
-    .eq('state', sub.state)
-
-  if (stateError) {
-    console.error('[subscription] state write failed', stateError.message)
-    return { ok: false, code: 'WRITE_FAILED', message: 'Could not save that. Try again.' }
-  }
-
-  // --- Refund what is left, on a cancellation ---------------------------
-  let refundedCents = 0
-  let refundPending = false
-
-  if (ending === 'cancel') {
-    // Read the amount back from the ledger rather than trusting the plan:
-    // the credits above have now been written, and the ledger is the record.
-    const owed = standingCreditCents(await ledgerFor(db, sub.id))
-
-    if (owed > 0) {
-      const charge = await lastChargeFor(db, sub.id)
-
-      if (!charge) {
-        // Nothing was ever charged, so there is nothing to refund against.
-        // The credit stays on the ledger for support to resolve.
-        refundPending = true
-        console.warn('[subscription] credit owed with no charge to refund against', {
-          subscriptionId: sub.id,
-          owed,
-        })
-      } else {
-        const result = await getCharger().refund({
-          amountCents: owed,
-          externalChargeId: charge,
-          idempotencyKey: `refund:${sub.id}`,
-          reason: 'subscription_canceled',
-        })
-
-        if (result.ok) {
-          // Two entries, netting to zero, because a refund does two things.
-          //
-          //   adjustment +owed   the standing credit is consumed
-          //   refund     -owed   cash leaves the platform
-          //
-          // A single positive refund row would discharge the credit and
-          // also make the subscription's ledger sum positive, as if the
-          // platform had gained the money it just paid out. A single
-          // negative row would move the cash but leave the credit standing,
-          // so the customer would appear owed it twice.
-          await writeBalancedEntries({
-            db,
-            entries: [
-              {
-                kind: 'adjustment',
-                amountCents: owed,
-                currency: 'USD',
-                subscriptionId: sub.id,
-                customerUserId: sub.customerUserId,
-                providerUserId: sub.providerUserId,
-                idempotencyKey: `refund-credit:${sub.id}`,
-                memo: 'Credit settled by refund',
-              },
-              {
-                kind: 'refund',
-                amountCents: -owed,
-                currency: 'USD',
-                subscriptionId: sub.id,
-                customerUserId: sub.customerUserId,
-                providerUserId: sub.providerUserId,
-                externalProcessor: result.processor,
-                externalId: result.externalId,
-                idempotencyKey: `refund:${sub.id}`,
-                memo: 'Refund of unspent credit on cancellation',
-              },
-            ],
-          })
-          refundedCents = owed
-        } else {
-          // Money did not move. The credit is still on the ledger, so the
-          // customer is still owed it and a retry can send it.
-          refundPending = true
-          console.error('[subscription] refund failed', {
-            subscriptionId: sub.id,
-            owed,
-            message: result.message,
-          })
-        }
-      }
-    }
-  }
+  // Cancelling used to refund whatever credit was unspent, reading the
+  // amount back from the ledger rather than trusting the plan, and posting
+  // a balanced adjustment/refund pair so the credit was discharged exactly
+  // once. There is no processor to refund from and no ledger to read, so
+  // both numbers are constants and the caller's shape is unchanged.
+  const refundedCents = 0
+  const refundPending = false
 
   await writeAudit({
     actorUserId: args.actorUserId,
@@ -397,18 +268,6 @@ async function endSubscription(args: {
 }
 
 /** The processor id of the most recent charge, to refund against. */
-async function lastChargeFor(db: Db, subscriptionId: string): Promise<string | null> {
-  const { data } = await db
-    .from('ledger_entries')
-    .select('external_id, created_at')
-    .eq('subscription_id', subscriptionId)
-    .eq('kind', 'customer_charge')
-    .not('external_id', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  return data?.external_id ?? null
-}
 
 export function pauseSubscription(args: {
   db: Db

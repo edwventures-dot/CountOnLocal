@@ -1,18 +1,35 @@
 /**
  * POST /v1/provider/onboarding/start  (API_CONTRACT, Auth / onboarding)
  *
- * "Creates provider profile and age state."
+ * Creates the provider profile.
+ *
+ * ## The date of birth is gone, and that is the point
+ *
+ * This used to take a birth date, derive an age band from it, refuse
+ * under-13s, and write a guardian state the server chose rather than the
+ * client. All of that existed to place somebody in one of three bands.
+ * There is one band now.
+ *
+ * Replacing it with a stored birth date nobody reads would be the worst of
+ * both: FTC guidance says an operator that asks for and receives a date of
+ * birth showing a user is under 13 has actual knowledge for COPPA
+ * purposes, so collecting it on a public site creates an obligation that
+ * not collecting it does not. The full product carried exactly that gap --
+ * an under-13 signup was refused, but only after an account already
+ * existed holding their email, and nothing deleted it.
+ *
+ * So the age question is answered by an attestation recorded as a consent
+ * record (see domain/consent.ts, PROVIDER_ATTESTATION) and this never
+ * learns a birth date at all. The refusal path and its audit action go
+ * with it: there is nothing to refuse when nothing is asked.
  */
 
 import { z } from 'zod'
-import { parsePlainDate, decideProviderAge, type PlainDate } from '@/domain/age'
-import { initialGuardianState } from '@/domain/guardian'
 import { writeAudit } from '@/server/audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
 export const onboardingStartSchema = z.object({
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD'),
   countryCode: z.string().length(2).default('US'),
   displayFirstName: z.string().trim().min(1).max(60),
 })
@@ -20,12 +37,8 @@ export const onboardingStartSchema = z.object({
 export type OnboardingStartInput = z.infer<typeof onboardingStartSchema>
 
 export type OnboardingStartResult =
-  | { ok: true; nextStage: 'guardian_invitation' | 'payout_onboarding'; guardianRequired: boolean }
-  | { ok: false; code: 'PROVIDER_INELIGIBLE' | 'ALREADY_ONBOARDED' | 'WRITE_FAILED' }
-
-export function todayUtc(now: Date): PlainDate {
-  return { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1, day: now.getUTCDate() }
-}
+  | { ok: true; nextStage: 'ready' }
+  | { ok: false; code: 'ALREADY_ONBOARDED' | 'WRITE_FAILED' }
 
 /**
  * Creates the provider profile and grants the provider role.
@@ -49,34 +62,10 @@ export async function startProviderOnboarding(args: {
 }): Promise<OnboardingStartResult> {
   const { db, userId, input, now } = args
 
-  const dob = parsePlainDate(input.dateOfBirth)
-  const decision = decideProviderAge(dob, todayUtc(now))
-
-  if (!decision.allowed) {
-    // Recorded so a pattern of repeated attempts from one account is
-    // visible to trust and safety. The DOB itself is redacted by
-    // writeAudit, so the log shows that a refusal happened without
-    // retaining the minor's birth date in a second place.
-    await writeAudit({
-      actorUserId: userId,
-      actorRole: 'provider',
-      action: 'provider.registration_refused',
-      targetType: 'user',
-      targetId: userId,
-      reasonCode: 'PROVIDER_INELIGIBLE',
-      ip: args.ip ?? null,
-    })
-    return { ok: false, code: 'PROVIDER_INELIGIBLE' }
-  }
-
-  const guardianState = initialGuardianState(decision.band)
-
   const { error: profileError } = await db.from('provider_profiles').insert({
     user_id: userId,
-    date_of_birth: input.dateOfBirth,
     country_code: input.countryCode,
     display_first_name: input.displayFirstName,
-    guardian_state: guardianState,
   })
 
   if (profileError) {
@@ -114,13 +103,9 @@ export async function startProviderOnboarding(args: {
     action: 'provider.onboarding_started',
     targetType: 'provider_profile',
     targetId: userId,
-    after: { guardian_state: guardianState, country_code: input.countryCode },
+    after: { country_code: input.countryCode },
     ip: args.ip ?? null,
   })
 
-  return {
-    ok: true,
-    guardianRequired: decision.guardianRequired,
-    nextStage: decision.guardianRequired ? 'guardian_invitation' : 'payout_onboarding',
-  }
+  return { ok: true, nextStage: 'ready' }
 }

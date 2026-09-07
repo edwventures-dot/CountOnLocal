@@ -27,7 +27,7 @@ import {
   isoDate,
   type ScheduleRule,
 } from '@/domain/schedule'
-import { parseScheduleRule } from '@/server/checkoutService'
+import { parseScheduleRule } from '@/server/scheduleRule'
 import { enqueueNotification } from '@/server/notifications'
 import { parseServiceDate } from '@/server/occurrenceService'
 import type { PlainDate } from '@/domain/age'

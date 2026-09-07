@@ -42,7 +42,6 @@ import {
   type IncidentSeverity,
 } from '@/domain/incident'
 import { roleGranting, hasPermission, type Role } from '@/domain/roles'
-import { classifyAge, parsePlainDate } from '@/domain/age'
 import { writeAudit, type AuditAction } from '@/server/audit'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -149,19 +148,8 @@ export async function openIncident(args: {
 
   let involvesMinor = false
   if (providerUserId) {
-    const { data: profile } = await db
-      .from('provider_profiles')
-      .select('date_of_birth')
-      .eq('user_id', providerUserId)
-      .maybeSingle()
-    if (profile) {
-      involvesMinor =
-        classifyAge(parsePlainDate(profile.date_of_birth), {
-          year: now.getUTCFullYear(),
-          month: now.getUTCMonth() + 1,
-          day: now.getUTCDate(),
-        }) === 'minor'
-    }
+    // Every provider is an adult on this branch, so this stays false.
+    involvesMinor = false
   }
 
   const respondBy = new Date(

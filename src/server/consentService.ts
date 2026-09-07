@@ -39,9 +39,7 @@ import {
   CONSENT_DOCUMENTS,
   type ConsentKind,
 } from '@/domain/consent'
-import { transition } from '@/domain/guardian'
 import { writeAudit } from '@/server/audit'
-import { guardianManualReviewEnabled } from '@/server/guardianReview'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
@@ -126,98 +124,9 @@ export async function recordConsent(args: {
     },
   })
 
-  if (args.kind === 'guardian_consent' && args.subjectUserId) {
-    const verified = await verifyRelationship({
-      db: args.db,
-      providerUserId: args.subjectUserId,
-      guardianUserId: args.signerUserId,
-      consentId: row.id,
-    })
-    if (!verified.ok) return verified
-    return { ok: true, consentId: row.id, guardianState: verified.state }
-  }
-
   return { ok: true, consentId: row.id }
 }
 
-/**
- * Advances the relationship, because a consent now backs it.
- *
- * Scoped to the signer's own relationship: a guardian cannot verify a
- * relationship they are not party to, whatever subject id they send.
- *
- * ## Where it advances TO depends on policy
- *
- * With guardian_manual_review on -- the default, see migration 0044 -- a
- * signed consent moves the relationship to `manual_review` rather than
- * `verified`. The minor still cannot accept a paying customer, because
- * that gate has always been `verified` and nothing about it moved. What
- * changed is that a person now stands between the signature and the first
- * customer.
- *
- * The consent record is untouched by this. It is still written, still
- * immutable, still the artifact saying exactly what was agreed. It simply
- * stops being the last step.
- *
- * With the setting off, this behaves as it always did.
- */
-async function verifyRelationship(args: {
-  db: Db
-  providerUserId: string
-  guardianUserId: string
-  consentId: string
-}): Promise<{ ok: true; state: string } | Extract<RecordConsentResult, { ok: false }>> {
-  const { data: rel } = await args.db
-    .from('guardian_relationships')
-    .select('id, state')
-    .eq('provider_user_id', args.providerUserId)
-    .eq('guardian_user_id', args.guardianUserId)
-    .maybeSingle()
-
-  if (!rel) {
-    return { ok: false, code: 'NO_RELATIONSHIP', message: 'No guardian relationship to confirm.' }
-  }
-
-  const reviewed = await guardianManualReviewEnabled(args.db)
-  const event = reviewed ? 'FLAG_FOR_REVIEW' : 'VERIFY'
-
-  const moved = transition(rel.state as never, event)
-  if (!moved.ok) {
-    return {
-      ok: false,
-      code: 'ILLEGAL_TRANSITION',
-      message: 'This relationship cannot be confirmed from its current state.',
-    }
-  }
-
-  const { error } = await args.db
-    .from('guardian_relationships')
-    .update({ state: moved.to, consented_at: new Date().toISOString() })
-    .eq('id', rel.id)
-    .eq('state', rel.state)
-
-  if (error) {
-    console.error('[consent] relationship verify failed', error.message)
-    return { ok: false, code: 'WRITE_FAILED', message: 'We could not save that. Please try again.' }
-  }
-
-  await args.db
-    .from('provider_profiles')
-    .update({ guardian_state: moved.to })
-    .eq('user_id', args.providerUserId)
-
-  await writeAudit({
-    actorUserId: args.guardianUserId,
-    actorRole: 'guardian',
-    action: reviewed ? 'guardian.flagged_for_review' : 'guardian.verified',
-    targetType: 'guardian_relationship',
-    targetId: rel.id,
-    before: { state: rel.state },
-    after: { state: moved.to, consent_record_id: args.consentId },
-  })
-
-  return { ok: true, state: moved.to }
-}
 
 /**
  * The active consent of a kind, or null.

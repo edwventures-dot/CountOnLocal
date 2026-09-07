@@ -49,7 +49,6 @@ import {
   type RetentionClass,
 } from '@/domain/retention'
 import { enqueueNotification } from '@/server/notifications'
-import { providerBalanceCents } from '@/domain/ledger'
 import { purgeExpiredMessages } from '@/server/messageService'
 import { writeAudit } from '@/server/audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -590,20 +589,21 @@ export async function closeAccount(args: {
   return { ok: true, effect: deletionEffect() }
 }
 
-/** What the platform still owes this provider, in cents. */
-async function amountOwed(db: Db, userId: string): Promise<number> {
-  const { data } = await db
-    .from('ledger_entries')
-    .select('kind, amount_cents')
-    .eq('provider_user_id', userId)
-
-  return providerBalanceCents(
-    (data ?? []).map((e) => ({
-      kind: e.kind,
-      amountCents: e.amount_cents,
-      currency: 'USD',
-    })) as never,
-  )
+/**
+ * What the platform still owes this provider, in cents.
+ *
+ * Always zero here. The platform never holds anybody's money on this
+ * branch -- customers pay providers directly -- so there is nothing to
+ * settle before an account can close.
+ *
+ * Kept as a function rather than deleted along with its two call sites,
+ * because those call sites express a real rule that outlives this branch:
+ * do not close an account while money is owed to it. Answering the
+ * question with a constant leaves the rule visible and makes restoring it
+ * a one-function change.
+ */
+async function amountOwed(_db: Db, _userId: string): Promise<number> {
+  return 0
 }
 
 /**

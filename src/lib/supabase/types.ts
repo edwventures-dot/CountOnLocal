@@ -27,6 +27,7 @@ export type ConsentKindEnum =
   | 'guardian_consent'
   | 'public_listing_consent'
   | 'customer_attestation'
+  | 'provider_attestation'
 
 export type MessageStateEnum = 'delivered' | 'blocked' | 'redacted'
 
@@ -244,10 +245,11 @@ export type Database = {
       provider_profiles: {
         Row: {
           user_id: string
-          date_of_birth: string
+          /** Null on this branch; the full product populates it. */
+          date_of_birth: string | null
           country_code: string
           display_first_name: string
-          guardian_state: GuardianStateEnum
+          guardian_state: GuardianStateEnum | null
           // 0004 removed stripe_connected_account_id and payout_ready.
           // Readiness is derived from the holder's Stripe state instead of
           // stored, so there is one answer and it is the true one.
@@ -256,10 +258,10 @@ export type Database = {
         } & Timestamps
         Insert: {
           user_id: string
-          date_of_birth: string
+          date_of_birth?: string | null
           country_code?: string
           display_first_name: string
-          guardian_state: GuardianStateEnum
+          guardian_state?: GuardianStateEnum | null
           payout_account_user_id?: string | null
           private_home_address_id?: string | null
         }

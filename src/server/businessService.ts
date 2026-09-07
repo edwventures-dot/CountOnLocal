@@ -12,16 +12,11 @@
  */
 
 import { z } from 'zod'
-import { classifyAge, ageInYearsOn, parsePlainDate } from '@/domain/age'
 import { canOfferService, flagProhibitedWording, type CatalogService } from '@/domain/catalog'
 import { checkSlug, uniqueSlug } from '@/domain/slug'
 import { publishBlockers, type ServiceReadiness, type PublishBlocker } from '@/domain/publish'
-import { isPayoutReady } from '@/domain/payout'
-import { checkPriceCap } from '@/domain/money'
-import type { GuardianState } from '@/domain/guardian'
-import { NO_ACCOUNT, type StripeAccountState } from '@/domain/payout'
+import { checkPriceCap } from '@/domain/pricing'
 import { writeAudit } from '@/server/audit'
-import { todayUtc } from '@/server/providerOnboarding'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
@@ -52,69 +47,23 @@ export type AddServiceInput = z.infer<typeof addServiceSchema>
 
 export type ProviderContext = {
   providerUserId: string
-  band: ReturnType<typeof classifyAge>
-  ageInYears: number
-  guardianState: GuardianState
-  guardianApprovedCodes: string[]
-  account: StripeAccountState
 }
 
 /** Loads everything the catalog and publish rules need about a provider. */
-async function loadProvider(db: Db, providerUserId: string, now: Date): Promise<ProviderContext | null> {
+async function loadProvider(db: Db, providerUserId: string): Promise<ProviderContext | null> {
+  // This used to gather a date of birth, an age band, a guardian state, the
+  // catalog codes that guardian had approved, and the Stripe readiness of
+  // whoever held the payout account -- five facts, because the catalog and
+  // publish rules each needed a different subset. All five are gone with
+  // the rules that consumed them.
   const { data: profile } = await db
     .from('provider_profiles')
-    .select('user_id, date_of_birth, guardian_state, payout_account_user_id')
+    .select('user_id')
     .eq('user_id', providerUserId)
     .maybeSingle()
+
   if (!profile) return null
-
-  const dob = parsePlainDate(profile.date_of_birth)
-  const today = todayUtc(now)
-
-  const { data: rel } = await db
-    .from('guardian_relationships')
-    .select('id')
-    .eq('provider_user_id', providerUserId)
-    .not('state', 'in', '(revoked,expired)')
-    .maybeSingle()
-
-  let guardianApprovedCodes: string[] = []
-  if (rel) {
-    const { data: approvals } = await db
-      .from('guardian_service_approvals')
-      .select('catalog_code')
-      .eq('relationship_id', rel.id)
-      .is('revoked_at', null)
-    guardianApprovedCodes = (approvals ?? []).map((a) => a.catalog_code)
-  }
-
-  let account = NO_ACCOUNT
-  if (profile.payout_account_user_id) {
-    const { data: holder } = await db
-      .from('users')
-      .select(
-        'stripe_connected_account_id, stripe_transfers_active, stripe_payouts_active, stripe_requirements_due',
-      )
-      .eq('id', profile.payout_account_user_id)
-      .maybeSingle()
-    if (holder) {
-      account = {
-        accountId: holder.stripe_connected_account_id,
-        transfersActive: holder.stripe_transfers_active,
-        payoutsActive: holder.stripe_payouts_active,
-        requirementsDue: (holder.stripe_requirements_due ?? []) as string[],
-      }
-    }
-  }
-
-  return {
-    providerUserId,
-    band: classifyAge(dob, today),
-    ageInYears: ageInYearsOn(dob, today),
-    guardianState: profile.guardian_state as GuardianState,
-    guardianApprovedCodes,
-    account,
-  }
+  return { providerUserId }
 }
 
 export type CreateBusinessResult =
@@ -140,9 +89,8 @@ export async function createBusiness(args: {
 }): Promise<CreateBusinessResult> {
   const { db, providerUserId, input, now } = args
 
-  const ctx = await loadProvider(db, providerUserId, now)
+  const ctx = await loadProvider(db, providerUserId)
   if (!ctx) return { ok: false, code: 'NO_PROVIDER_PROFILE' }
-  if (ctx.band === 'under_min_age') return { ok: false, code: 'PROVIDER_INELIGIBLE' }
 
   // A requested slug is checked as given; a derived one is made unique.
   let slug: string
@@ -231,11 +179,10 @@ export async function addService(args: {
   const cap = checkPriceCap({
     priceCents: input.priceCents,
     priceUnit: input.priceUnit,
-    billingCycleWeeks: input.billingCycleWeeks,
   })
   if (!cap.ok) return { ok: false, code: 'PRICE_TOO_HIGH', message: cap.message }
 
-  const ctx = await loadProvider(db, providerUserId, now)
+  const ctx = await loadProvider(db, providerUserId)
   if (!ctx) return { ok: false, code: 'NO_PROVIDER_PROFILE' }
 
   const { data: business } = await db
@@ -263,13 +210,7 @@ export async function addService(args: {
     active: catalogRow.active,
   }
 
-  const eligible = canOfferService({
-    service,
-    ageInYears: ctx.ageInYears,
-    band: ctx.band,
-    guardianState: ctx.guardianState,
-    guardianApprovedCodes: ctx.guardianApprovedCodes,
-  })
+  const eligible = canOfferService({ service })
   if (!eligible.allowed) return { ok: false, code: eligible.code }
 
   // Scope check on everything the provider wrote, not just the description:
@@ -369,7 +310,7 @@ export async function getPublishReadiness(args: {
 }): Promise<ReadinessResult> {
   const { db, providerUserId, businessId, now } = args
 
-  const ctx = await loadProvider(db, providerUserId, now)
+  const ctx = await loadProvider(db, providerUserId)
   if (!ctx) return { ok: false, code: 'NO_PROVIDER_PROFILE' }
 
   const { data: business } = await db
@@ -402,9 +343,6 @@ export async function getPublishReadiness(args: {
   return {
     ok: true,
     blockers: publishBlockers({
-      band: ctx.band,
-      guardianState: ctx.guardianState,
-      account: ctx.account,
       businessState: business.state,
       publicAreaLabel: business.public_area_label,
       services: readiness,
@@ -443,28 +381,21 @@ export async function publishBusiness(args: {
   // `verified` only -- not isGuardianCleared, which is also true for
   // not_required, meaning an adult with no guardian at all. That
   // distinction is exactly what the old unconditional badge lost.
-  const ctxForBadge = await loadProvider(db, providerUserId, now)
-  const badge =
-    ctxForBadge?.guardianState === 'verified'
-      ? 'guardian_connected'
-      : ctxForBadge && isPayoutReady(ctxForBadge.account)
-        ? 'identity_verified'
-        : null
-
-  // Searchable only if this provider is an adult, or a guardian has signed
-  // the Public Listing Consent. The direct link and QR work either way --
-  // that distinction is the whole of the default-private model.
+  // The trust badge is gone rather than defaulted.
   //
-  // Read here, where provider age is available, and published as a plain
-  // boolean because the storefront runs on the anon client and must never
-  // be able to ask whether a provider is a minor.
-  const isMinor = ctxForBadge?.band === 'minor'
-  const { data: listingRow } = await db
-    .from('businesses')
-    .select('public_listing_consent_id')
-    .eq('id', businessId)
-    .maybeSingle()
-  const searchable = !isMinor || Boolean(listingRow?.public_listing_consent_id)
+  // It had two values and both were claims about a verification that had
+  // actually happened: "Guardian connected" meant a guardian had completed
+  // consent, and "Identity verified" meant Stripe had run its check before
+  // letting somebody be paid. Neither process exists here, so neither badge
+  // can be earned, and rule 10 says a badge nobody earned does not go on a
+  // page. Null is the honest value.
+  const badge = null
+
+  // Every listing is searchable. The old rule made a minor's page reachable
+  // by direct link or QR but never indexed, until a guardian separately
+  // consented -- the default-private model that existed entirely to protect
+  // young providers. With no minors there is nobody it was protecting.
+  const searchable = true
 
   const publishedAt = now.toISOString()
   const { error } = await db

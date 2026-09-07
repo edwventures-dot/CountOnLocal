@@ -26,9 +26,7 @@ import {
   type CreditDecision,
   type SkipPolicy,
 } from '@/domain/credit'
-import { creditEntries, visitFeeShareCents } from '@/domain/ledger'
-import { quoteCycle, type PriceUnit } from '@/domain/money'
-import { writeBalancedEntries } from '@/server/ledgerWriter'
+import type { PriceUnit } from '@/domain/pricing'
 import { writeAudit } from '@/server/audit'
 import type { PlainDate } from '@/domain/age'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -280,49 +278,15 @@ export async function skipOccurrence(args: {
     return { ok: false, code: 'WRITE_FAILED', message: 'Could not save that. Try again.' }
   }
 
-  if (credit.credited && credit.amountCents > 0) {
-    const cycleQuote = quoteCycle({
-      priceCents: occ.pricing.priceCents,
-      priceUnit: occ.pricing.priceUnit,
-      billingCycleWeeks: occ.pricing.billingCycleWeeks,
-      fee: { percentBasisPoints: occ.pricing.feeBps, minimumCents: occ.pricing.feeMinCents },
-    })
-
-    const written = await writeBalancedEntries({
-      db,
-      entries: creditEntries({
-        serviceCents: credit.amountCents,
-        // The customer paid a fee on this visit too, so it comes back with
-        // it. Proportional to the cycle's actual fee rather than a fresh
-        // percentage, so a cycle where the minimum applied reverses the
-        // minimum proportionally as well.
-        feeShareCents: visitFeeShareCents({
-          cycleFeeCents: cycleQuote.platformFeeCents,
-          visitValueCents: credit.amountCents,
-          cycleSubtotalCents: cycleQuote.serviceSubtotalCents,
-        }),
-        subscriptionId: occ.subscriptionId,
-        occurrenceId: occ.id,
-        customerUserId: occ.customerUserId,
-        providerUserId: occ.providerUserId,
-        memo: credit.code,
-        // One credit per occurrence, ever. A double-tapped skip button
-        // cannot credit the same visit twice.
-        idempotencyKey: `credit:${occ.id}`,
-      }),
-    })
-
-    if (!written.ok) {
-      // The occurrence is already credited but the ledger row is missing.
-      // Loud, and left for reconciliation rather than rolled back: the
-      // customer has been told they will not be billed, and taking that
-      // back silently would be worse than an accounting gap we can see.
-      console.error('[occurrence] credit ledger write failed', {
-        occurrenceId,
-        code: written.code,
-      })
-    }
-  }
+  // A skipped visit used to post three ledger entries: the customer's
+  // credit, the provider's earning coming back off, and the platform
+  // handing back its fee on work nobody did. None of that happens here,
+  // because no money went through the platform in the first place.
+  //
+  // `credit` is still computed and still returned. What it means now is
+  // "this visit does not count towards what the customer owes" -- which
+  // the two of them settle between themselves, and which the provider
+  // still needs to see on their own records.
 
   await writeAudit({
     actorUserId,
