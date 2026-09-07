@@ -20,7 +20,7 @@ import { hasPermission } from '@/domain/roles'
 import { renderFlyerSheet } from '@/server/flyerService'
 import { getGrowDashboard } from '@/server/growService'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { formatCents } from '@/domain/money'
+
 import { qrSvgDataUri } from '@/server/qr'
 import { apiError, newRequestId } from '@/lib/http'
 import { track } from '@/server/analytics'
@@ -85,7 +85,7 @@ export async function GET(request: Request): Promise<Response> {
     {
       businessName: result.dashboard.businessName,
       serviceName: service.publicName,
-      price: row ? formatCents(row.price_cents).replace(/\.00$/, '') : '',
+      price: row ? `$${(row.price_cents / 100).toFixed(2).replace(/\.00$/, '')}` : '',
       priceUnit: row ? `/${row.price_unit}` : '',
       areaLabel: biz?.public_area_label ?? null,
       // The share URL, so a flyer that gets scanned is attributed.

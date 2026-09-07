@@ -11,35 +11,12 @@
  */
 
 import { guard, parseJson, fieldErrorsFrom } from '@/app/api/v1/_shared'
-import { createSubscription, createSubscriptionSchema } from '@/server/checkoutService'
+import { createSubscription, createSubscriptionSchema } from '@/server/subscribeService'
 import { apiError, apiOk } from '@/lib/http'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { clientIp } from '@/server/auth'
 import { track } from '@/server/analytics'
-import type { ReferralOutcome } from '@/server/checkoutService'
 
-/** Customer-facing wording for why a code did or did not apply. */
-function referralSummary(outcome: ReferralOutcome): {
-  applied: boolean
-  message: string
-} {
-  if (outcome.applied) {
-    return { applied: true, message: 'Referral applied. Your first cycle has no platform fee.' }
-  }
-
-  switch (outcome.reason) {
-    case 'UNKNOWN_CODE':
-      return { applied: false, message: "We don't recognise that referral code." }
-    case 'REVOKED_CODE':
-      return { applied: false, message: 'That referral code is no longer active.' }
-    case 'SELF_REFERRAL':
-      return { applied: false, message: 'You cannot use your own referral code.' }
-    case 'ALREADY_REFERRED':
-      return { applied: false, message: 'A referral code was already applied to this subscription.' }
-    default:
-      return { applied: false, message: 'We could not apply that referral code.' }
-  }
-}
 
 export async function POST(req: Request): Promise<Response> {
   const g = await guard('subscription:create')
@@ -67,32 +44,7 @@ export async function POST(req: Request): Promise<Response> {
     ip: clientIp(req),
   })
 
-  if (result.ok && result.referral?.applied) {
-    track({
-      event: 'referral_converted',
-      userId: auth.userId,
-      properties: { subscription_id: result.subscriptionId },
-    })
-  }
-
-  if (result.ok) {
-    // `checkout_started`, not `subscription_started`. Nothing has been
-    // charged and nobody is on a route yet -- the subscription starts when
-    // the first cycle is paid, on PUT .../payment. Keeping the two events
-    // distinct is what makes the gap between them mean "abandoned before
-    // paying" rather than nothing at all.
-    track({
-      event: 'checkout_started',
-      userId: auth.userId,
-      properties: {
-        subscription_id: result.subscriptionId,
-        subscription_state: result.state,
-        occurrence_count: result.occurrenceCount,
-        price_cents: result.quote.serviceSubtotalCents,
-        platform_fee_cents: result.quote.platformFeeCents,
-      },
-    })
-  } else if (result.code === 'AT_CAPACITY') {
+  if (result.ok === false && result.code === 'AT_CAPACITY') {
     // Worth counting separately from other failures. A full route is the
     // signal PRD section 14's density prompt exists to act on, and the
     // funnel needs to distinguish "nobody wanted it" from "we turned them
@@ -132,11 +84,6 @@ export async function POST(req: Request): Promise<Response> {
       state: result.state,
       startDate: result.startDate,
       occurrenceCount: result.occurrenceCount,
-      billing: {
-        serviceSubtotalCents: result.quote.serviceSubtotalCents,
-        platformFeeCents: result.quote.platformFeeCents,
-        totalCents: result.quote.customerTotalCents,
-      },
       // The next step is attaching a payment method. Until then nothing is
       // charged and the provider has not been committed to anything.
       nextStage: 'payment_method',
@@ -144,7 +91,6 @@ export async function POST(req: Request): Promise<Response> {
       // rather than swallowed: a customer who typed one and then sees the
       // full price with no explanation has been overcharged as far as they
       // are concerned.
-      ...(result.referral ? { referral: referralSummary(result.referral) } : {}),
     },
     201,
   )

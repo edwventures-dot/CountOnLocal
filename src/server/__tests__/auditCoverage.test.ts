@@ -65,12 +65,6 @@ const allSource = sourceFiles(SRC)
  * else would accept.
  */
 const AUDIT_NOT_YET_WIRED: Readonly<Record<string, string>> = {
-  'guardian.category_approved': 'per-category guardian approval is designed but not built',
-  'guardian.category_revoked': 'per-category guardian approval is designed but not built',
-  'payout.account_ready': 'the Connect sync updates columns; it does not yet log the transition',
-  'payout.requirements_due': 'same sync, same gap',
-  'ledger.credit_written': 'credits are written by the occurrence path, which logs occurrence.credited instead',
-  'occurrence.credited': 'the skip/credit path logs its own occurrence actions; this name is unused',
   'occurrence.canceled': 'occurrence cancellation is only reachable through subscription cancellation',
   'occurrence.issue_reported': 'reporting a problem opens an incident and logs incident.opened',
   'review.hidden': 'moderation hides via the report path, which logs review.reported',
@@ -87,12 +81,8 @@ const AUDIT_NOT_YET_WIRED: Readonly<Record<string, string>> = {
  * never sent.
  */
 const NOTIFICATION_NOT_YET_WIRED: Readonly<Record<string, string>> = {
-  'guardian.approved': 'the guardian is told by the consent flow itself, on screen',
-  'guardian.revoked': 'revocation is immediate and visible in both dashboards',
   'business.published': 'the provider is looking at the page when it happens',
-  'subscription.canceled': 'the customer cancels it themselves and sees the result',
   'occurrence.completed': 'the customer sees it on their dashboard',
-  'occurrence.credited': 'shown as a credit against the next cycle',
   'safety.alert': 'incidents are worked from the console, not pushed',
 }
 
@@ -174,11 +164,13 @@ describe('notification kinds', () => {
     }
   })
 
-  it('tells a customer when their card is charged or declined', () => {
-    // Not excusable. Money leaving somebody's account with no receipt, and
-    // a failed payment nobody is told about, are the two that end with a
-    // customer discovering it from their bank.
-    for (const kind of ['cycle.settled', 'subscription.payment_failed'] as const) {
+  it('tells a customer when a visit they were expecting will not happen', () => {
+    // This used to be about money: a charge with no receipt and a failed
+    // payment nobody was told about, the two that end with a customer
+    // discovering it from their bank. Nothing charges anybody now, and the
+    // equivalent is a visit that was on the schedule and is not going to
+    // happen -- somebody waiting at home for a provider who is not coming.
+    for (const kind of ['occurrence.credited', 'occurrence.upcoming'] as const) {
       expect(enqueuedKinds.has(kind), `${kind} is never sent`).toBe(true)
     }
   })

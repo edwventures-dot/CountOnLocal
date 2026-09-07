@@ -33,7 +33,7 @@
  */
 
 import { DELIVERED_STATES, type OccurrenceState } from './occurrence'
-import type { PlainDate } from './age'
+import type { PlainDate } from './calendar'
 import { toEpochDay } from './schedule'
 
 export const MIN_RATING = 1

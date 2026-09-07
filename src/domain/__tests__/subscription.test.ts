@@ -10,7 +10,7 @@ import {
   type SubscriptionState,
 } from '../subscription'
 import { isoDate } from '../schedule'
-import type { PlainDate } from '../age'
+import type { PlainDate } from '../calendar'
 
 const d = (y: number, m: number, day: number): PlainDate => ({ year: y, month: m, day })
 const TODAY = d(2026, 9, 10)

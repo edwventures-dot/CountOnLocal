@@ -13,7 +13,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { startProviderOnboarding } from '@/server/providerOnboarding'
-import { createGuardianInvitation, acceptGuardianInvitation, revokeGuardianRelationship } from '@/server/guardianService'
 import { createBusiness, addService, publishBusiness, setServiceArea } from '@/server/businessService'
 
 const BASE = process.env['E2E_BASE_URL'] ?? 'http://localhost:3100'
@@ -71,32 +70,9 @@ beforeAll(async () => {
   await startProviderOnboarding({
     db: admin,
     userId: provider.domainId,
-    input: { dateOfBirth: dobForAge(15), countryCode: 'US', displayFirstName: 'Jamie' },
+    input: { countryCode: 'US', displayFirstName: 'Jamie' },
     now,
   })
-  const invite = await createGuardianInvitation({
-    db: admin,
-    providerUserId: provider.domainId,
-    input: { email: GUARDIAN_EMAIL },
-    now,
-  })
-  if (!invite.ok) throw new Error('invite failed')
-  relationshipId = invite.relationshipId
-  await acceptGuardianInvitation({
-    adminDb: admin,
-    token: invite.token,
-    guardianUserId: guardian.domainId,
-    now,
-  })
-  await admin
-    .from('guardian_relationships')
-    .update({ state: 'verified', consented_at: now.toISOString() })
-    .eq('id', relationshipId)
-  await admin
-    .from('provider_profiles')
-    .update({ guardian_state: 'verified' })
-    .eq('user_id', provider.domainId)
-
   // A payout-ready guardian account.
   await admin
     .from('users')
@@ -248,26 +224,4 @@ describe('an unpublished page is simply not found', () => {
     expect(status).toBe(404)
   })
 
-  it('404s once a guardian revokes, rather than announcing a pause', async () => {
-    const result = await revokeGuardianRelationship({
-      db: admin,
-      relationshipId,
-      actorUserId: guardian.domainId,
-      actorRole: 'guardian',
-      reasonCode: 'guardian_request',
-      now: new Date(),
-    })
-    expect(result.ok).toBe(true)
-
-    // The business should now be paused_guardian, so the page disappears.
-    const { data } = await admin
-      .from('businesses')
-      .select('state')
-      .eq('id', businessId)
-      .single()
-    expect(data?.state).toBe('paused_guardian')
-
-    const { status } = await getPage(`/${slug}`)
-    expect(status).toBe(404)
-  })
 })

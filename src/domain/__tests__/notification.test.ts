@@ -152,9 +152,12 @@ describe('the payload carries ids, not values', () => {
 })
 
 describe('kinds', () => {
-  it('recognises the PRD section 20 events', () => {
-    expect(isNotificationKind('subscription.payment_failed')).toBe(true)
-    expect(isNotificationKind('guardian.approval_requested')).toBe(true)
+  it('recognises the events this product still has', () => {
+    // The two named here before were a payment failure and a guardian
+    // approval request. Both were real PRD section 20 events and neither
+    // can happen now.
+    expect(isNotificationKind('subscription.new_subscriber')).toBe(true)
+    expect(isNotificationKind('occurrence.upcoming')).toBe(true)
   })
 
   it('rejects anything invented', () => {
@@ -163,10 +166,12 @@ describe('kinds', () => {
     expect(isNotificationKind(null)).toBe(false)
   })
 
-  it('will not let a safety alert or a payment failure be suppressed', () => {
+  it('will not let a safety alert be suppressed', () => {
+    // The list used to include a payment failure and a guardian revocation.
+    // Neither exists now, and safety.alert is the one that always mattered:
+    // somebody muting notifications must not thereby mute a warning about
+    // their own safety.
     expect(UNSUPPRESSIBLE_KINDS.has('safety.alert')).toBe(true)
-    expect(UNSUPPRESSIBLE_KINDS.has('subscription.payment_failed')).toBe(true)
-    expect(UNSUPPRESSIBLE_KINDS.has('guardian.revoked')).toBe(true)
   })
 
   it('leaves ordinary updates suppressible', () => {

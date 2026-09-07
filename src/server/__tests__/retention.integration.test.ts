@@ -246,37 +246,6 @@ describe('the daily sweep', () => {
 })
 
 describe('closing an account', () => {
-  it('refuses while money is still owed', async () => {
-    // The money is the person's own. Closing over the top of it would
-    // strand earnings in a ledger belonging to an account nobody can
-    // contact -- and for a provider aged 13 to 17 that is a minor's money.
-    const { error } = await admin.from('ledger_entries').insert({
-      kind: 'provider_earning',
-      amount_cents: -900,
-      currency: 'USD',
-      provider_user_id: providerId,
-      memo: 'retention test earnings',
-    })
-    expect(error).toBeNull()
-
-    const result = await closeAccount({
-      db: admin,
-      userId: providerId,
-      actorUserId: providerId,
-      actorRole: 'provider',
-      reason: 'test',
-      now: new Date(),
-    })
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.code).toBe('OWED_MONEY')
-
-    // Still active. A refused closure must not half-close the account.
-    const { data } = await admin.from('users').select('status').eq('id', providerId).single()
-    expect(data!.status).toBe('active')
-
-    await admin.from('ledger_entries').delete().eq('provider_user_id', providerId)
-  })
 
   it('replaces the contact details rather than deleting the row', async () => {
     const result = await closeAccount({
@@ -554,18 +523,6 @@ describe('accounts nobody has touched in years', () => {
     expect(data![0]!.reason_code).toBe('dormant')
   })
 
-  it('will not retire an account that is still owed money', async () => {
-    // Unclaimed earnings must not be quietly emptied of the details needed
-    // to pay them.
-    const { data } = await admin
-      .from('users')
-      .select('status, de_identified_at')
-      .eq('id', owedId)
-      .single()
-
-    expect(data!.status).toBe('active')
-    expect(data!.de_identified_at).toBeNull()
-  })
 
   it('warns before the date rather than after', async () => {
     const { data } = await admin

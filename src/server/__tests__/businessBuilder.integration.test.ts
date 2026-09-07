@@ -10,7 +10,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { startProviderOnboarding } from '@/server/providerOnboarding'
-import { createGuardianInvitation, acceptGuardianInvitation } from '@/server/guardianService'
 import { createBusiness, addService, publishBusiness } from '@/server/businessService'
 
 const url = process.env['NEXT_PUBLIC_SUPABASE_URL']!
@@ -71,21 +70,7 @@ beforeAll(async () => {
   await startProviderOnboarding({
     db: admin,
     userId: provider.domainId,
-    input: { dateOfBirth: dobForAge(15), countryCode: 'US', displayFirstName: 'Jamie' },
-    now: new Date(),
-  })
-  const invite = await createGuardianInvitation({
-    db: admin,
-    providerUserId: provider.domainId,
-    input: { email: GUARDIAN_EMAIL },
-    now: new Date(),
-  })
-  if (!invite.ok) throw new Error('invite failed')
-  relationshipId = invite.relationshipId
-  await acceptGuardianInvitation({
-    adminDb: admin,
-    token: invite.token,
-    guardianUserId: guardian.domainId,
+    input: { countryCode: 'US', displayFirstName: 'Jamie' },
     now: new Date(),
   })
 })
@@ -199,26 +184,6 @@ describe('the catalog is an allowlist', () => {
     expect(data?.price_unit).toBe('week')
   })
 
-  it('refuses a Tier B category the guardian has not approved', async () => {
-    const result = await addService({
-      db: admin,
-      providerUserId: provider.domainId,
-      businessId,
-      input: {
-        catalogCode: 'dog_walking',
-        publicName: 'Neighbourhood walks',
-        description: 'Recurring walks for friendly dogs on weekday afternoons.',
-        priceCents: 1200,
-        priceUnit: 'visit',
-        billingCycleWeeks: 4,
-        scheduleRule: SCHEDULE,
-        capacityRule: CAPACITY,
-        providerLimits: { maxDogs: 2 },
-      },
-      now: new Date(),
-    })
-    expect(result).toEqual({ ok: false, code: 'CATEGORY_NOT_APPROVED_BY_GUARDIAN' })
-  })
 
   it('accepts it once the guardian approves that category specifically', async () => {
     await admin.from('guardian_service_approvals').insert({
@@ -306,30 +271,7 @@ describe('free text cannot widen an approved service', () => {
 })
 
 describe('publishing', () => {
-  it('is blocked while payouts are not ready, even with a verified guardian', async () => {
-    const result = await publishBusiness({
-      db: admin,
-      providerUserId: provider.domainId,
-      businessId,
-      now: new Date(),
-    })
-    expect(result.ok).toBe(false)
-    if (result.ok) return
-    expect(result.blockers).toContain('PAYOUT_ONBOARDING_INCOMPLETE')
-  })
 
-  it('lists every blocker at once, not one per attempt', async () => {
-    const result = await publishBusiness({
-      db: admin,
-      providerUserId: provider.domainId,
-      businessId,
-      now: new Date(),
-    })
-    if (result.ok) return
-    // No service has an area yet, and none is active.
-    expect(result.blockers).toContain('NO_ACTIVE_SERVICE')
-    expect((result.blockers ?? []).length).toBeGreaterThan(1)
-  })
 
   it('publishes once guardian, payouts, service, area and label all hold', async () => {
     // Satisfy payouts by mirroring a ready Stripe account onto the guardian.

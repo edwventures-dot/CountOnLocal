@@ -29,7 +29,7 @@ import { parseServiceDate } from '@/server/occurrenceService'
 import { isoDate } from '@/domain/schedule'
 import { writeAudit } from '@/server/audit'
 import { noticeToProviderAndGuardian } from '@/server/notices'
-import type { PlainDate } from '@/domain/age'
+import type { PlainDate } from '@/domain/calendar'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 

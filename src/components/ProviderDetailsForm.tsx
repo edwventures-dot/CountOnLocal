@@ -1,26 +1,21 @@
 'use client'
 
 /**
- * Step one: a first name and a date of birth.
+ * Step one: a first name, and confirming you are an adult.
  *
- * ## Why a date of birth, and only here
+ * ## No date of birth
  *
- * The signup form deliberately does not ask. Age matters for what you
- * DO, not for who you are: a provider's age decides whether a guardian is
- * required, and a customer only attests to being 18 at checkout. Asking
- * everyone at signup would collect a minor's exact date of birth from
- * someone who might only ever hire a neighbour.
+ * This asked for one, because a provider's age decided whether a guardian
+ * was required and there were three bands to place them in. There is one
+ * band now, so the question is a yes/no -- and asking for a birth date to
+ * answer a yes/no would be the worst available option. FTC guidance says
+ * an operator that asks for and receives a date of birth showing a user is
+ * under 13 has actual knowledge of that for COPPA purposes; not asking
+ * creates no such obligation.
  *
- * The form says what happens to it, because a fourteen-year-old typing
- * their birthday into a website deserves to be told.
- *
- * ## The server decides, not this form
- *
- * Nothing here computes an age or a guardian state. The value goes to the
- * server, which derives both -- row level security grants no client write
- * on provider_profiles precisely so the caller cannot choose their own
- * guardian_state. The check below is only to save a round trip on an
- * obviously impossible date.
+ * The attestation is a real record, not a checkbox that vanishes. It is
+ * stored as a consent record with the exact wording that was on screen,
+ * the same as the customer's -- see domain/consent.ts.
  */
 
 import { useState } from 'react'
@@ -30,7 +25,7 @@ import { Alert, Field } from '@/components/ui'
 export function ProviderDetailsForm() {
   const router = useRouter()
   const [firstName, setFirstName] = useState('')
-  const [dob, setDob] = useState('')
+  const [isAdult, setIsAdult] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -38,8 +33,8 @@ export function ProviderDetailsForm() {
     e.preventDefault()
     setError(null)
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
-      setError('Enter your date of birth as year, month and day.')
+    if (!isAdult) {
+      setError('You have to be 18 or over to list a service here.')
       return
     }
 
@@ -48,7 +43,7 @@ export function ProviderDetailsForm() {
       const res = await fetch('/api/v1/provider/onboarding/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayFirstName: firstName, dateOfBirth: dob, countryCode: 'US' }),
+        body: JSON.stringify({ displayFirstName: firstName, countryCode: 'US' }),
       })
       const body = await res.json().catch(() => ({}))
 
@@ -80,15 +75,15 @@ export function ProviderDetailsForm() {
         onChange={(e) => setFirstName(e.target.value)}
       />
 
-      <Field
-        label="Date of birth"
-        name="dateOfBirth"
-        type="date"
-        hint="Private. It is never shown to customers and never leaves our servers. We use it to know whether you need a parent or guardian to approve your account."
-        required
-        value={dob}
-        onChange={(e) => setDob(e.target.value)}
-      />
+      <label className="check">
+        <input
+          type="checkbox"
+          name="isAdult"
+          checked={isAdult}
+          onChange={(e) => setIsAdult(e.target.checked)}
+        />
+        <span>I am 18 or older.</span>
+      </label>
 
       <button className="btn btn--full" type="submit" disabled={busy}>
         {busy ? 'Saving…' : 'Continue'}

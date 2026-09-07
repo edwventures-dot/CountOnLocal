@@ -30,19 +30,12 @@ export type NotificationChannel = 'email' | 'sms' | 'push'
 
 /** Event names from PRD section 20. */
 export const NOTIFICATION_KINDS = [
-  'guardian.approval_requested',
-  'guardian.approved',
-  'guardian.revoked',
-  'guardian.aged_out',
   'business.published',
   'subscription.new_subscriber',
-  'subscription.payment_failed',
   'subscription.canceled',
   'occurrence.upcoming',
   'occurrence.completed',
   'occurrence.credited',
-  'cycle.settled',
-  'payout.sent',
   'review.received',
   'safety.alert',
   // Not from PRD 20. Added with the dormancy sweep (migration 0039): an
@@ -65,9 +58,6 @@ export function isNotificationKind(v: unknown): v is NotificationKind {
  * their child in a situation nobody told them about.
  */
 export const UNSUPPRESSIBLE_KINDS: ReadonlySet<NotificationKind> = new Set([
-  'guardian.approval_requested',
-  'guardian.revoked',
-  'subscription.payment_failed',
   'safety.alert',
 ])
 

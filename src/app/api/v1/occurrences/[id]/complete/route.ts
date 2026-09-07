@@ -72,11 +72,7 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
   if (!gate.allowed) {
     return apiError(
       gate.code,
-      gate.code === 'GUARDIAN_APPROVAL_REQUIRED'
-        ? // The exact wording SAFETY_TRUST_POLICY 2 permits. Nothing about
-          // who revoked, or why.
-          'Guardian approval is required to continue.'
-        : 'This account cannot run a route.',
+      'This account cannot run a route.',
       403,
       { requestId },
     )

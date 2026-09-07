@@ -27,8 +27,8 @@
  * refundable amount, and it is the caller's job to actually move it.
  */
 
-import type { PlainDate } from './age'
-import { comparePlainDate } from './age'
+import type { PlainDate } from './calendar'
+import { comparePlainDate } from './calendar'
 import { decideSkipCredit, type CreditDecision, type SkipPolicy } from './credit'
 import type { OccurrenceState } from './occurrence'
 

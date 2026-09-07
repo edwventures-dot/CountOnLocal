@@ -19,7 +19,6 @@
 import { authenticate } from '@/server/auth'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { standingCreditCents, type LedgerEntry } from '@/domain/ledger'
 import { LIVE_SUBSCRIPTION_STATES, type SubscriptionState } from '@/domain/subscription'
 import { DELIVERED_STATES, type OccurrenceState } from '@/domain/occurrence'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
@@ -65,46 +64,24 @@ export async function GET(): Promise<Response> {
   // Occurrences and ledger for every subscription at once, rather than a
   // query per subscription -- a customer with six subscriptions should not
   // cost thirteen round trips.
-  const [{ data: occRows }, { data: ledgerRows }] = await Promise.all([
-    subscriptionIds.length
-      ? db
-          .from('service_occurrences')
-          .select('id, subscription_id, service_date, state, service_value_cents')
-          .in('subscription_id', subscriptionIds)
-          .order('service_date', { ascending: true })
-      : Promise.resolve({ data: [] as never[] }),
-    // Privileged, and only for this.
-    //
-    // ledger_entries is revoked from `authenticated` with no policy, which
-    // is right: a row carries provider earnings, the platform fee and a
-    // processor id, and none of that is the customer's to read. Reading it
-    // through the user-scoped client returned nothing at all -- no error,
-    // just an empty set -- so every customer's credit balance displayed as
-    // zero however much they were owed.
-    //
-    // Authorization is already established: subscriptionIds came from a
-    // user-scoped query above, so row level security has confirmed the
-    // caller owns every one of them. Only the aggregate leaves this file.
-    subscriptionIds.length
-      ? supabaseAdmin()
-          .from('ledger_entries')
-          .select('subscription_id, kind, amount_cents')
-          .in('subscription_id', subscriptionIds)
-      : Promise.resolve({ data: [] as never[] }),
-  ])
+  // The ledger half of this query is gone. It read credit balances through
+  // the privileged client because ledger_entries is revoked from
+  // `authenticated` -- and reading it user-scoped had silently returned an
+  // empty set, so every customer's credit showed as zero however much they
+  // were owed. There is no ledger now, so there is no balance to show.
+  const { data: occRows } = subscriptionIds.length
+    ? await db
+        .from('service_occurrences')
+        .select('id, subscription_id, service_date, state, service_value_cents')
+        .in('subscription_id', subscriptionIds)
+        .order('service_date', { ascending: true })
+    : { data: [] as never[] }
 
   const occurrences = occRows ?? []
-  const ledger = ledgerRows ?? []
 
   const todayIso = new Date().toISOString().slice(0, 10)
 
   const creditBySubscription = new Map<string, number>()
-  for (const id of subscriptionIds) {
-    const entries = ledger
-      .filter((l) => l.subscription_id === id)
-      .map((l) => ({ kind: l.kind, amountCents: l.amount_cents, currency: 'USD' })) as LedgerEntry[]
-    creditBySubscription.set(id, standingCreditCents(entries))
-  }
 
   const subscriptions = (subs ?? []).map((s) => {
     const svc = one<{ public_name: string; businesses: unknown }>(s.provider_services)

@@ -30,7 +30,7 @@ import {
 import { parseScheduleRule } from '@/server/scheduleRule'
 import { enqueueNotification } from '@/server/notifications'
 import { parseServiceDate } from '@/server/occurrenceService'
-import type { PlainDate } from '@/domain/age'
+import type { PlainDate } from '@/domain/calendar'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 

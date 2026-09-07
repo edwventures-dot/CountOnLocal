@@ -4,7 +4,7 @@ import { authenticate } from '@/server/auth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { RespondToReview } from '@/components/ReviewControls'
 import { getPublishReadiness } from '@/server/businessService'
-import { formatCents } from '@/domain/money'
+import { formatCents } from '@/domain/pricing'
 import {
   AddServiceForm,
   CreateBusinessForm,
@@ -251,10 +251,6 @@ export default async function BusinessPage() {
  */
 function explainBlocker(blocker: PublishBlocker): string {
   switch (blocker) {
-    case 'GUARDIAN_APPROVAL_REQUIRED':
-      return 'Your guardian has not approved yet. Finish that on the Start page.'
-    case 'PAYOUT_ONBOARDING_INCOMPLETE':
-      return 'Payouts are not set up, so there would be nowhere to send your money.'
     case 'NO_ACTIVE_SERVICE':
       return 'Add at least one service.'
     case 'SERVICE_MISSING_AREA':

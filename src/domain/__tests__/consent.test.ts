@@ -1,25 +1,25 @@
 import { describe, expect, it } from 'vitest'
+import { checkPriceCap, MAX_OCCURRENCE_PRICE_CENTS } from '../pricing'
 import {
   canonicalText,
   checkAcknowledgements,
   checkTypedSignature,
   CONSENT_DOCUMENTS,
   CUSTOMER_ATTESTATION,
-  GUARDIAN_CONSENT,
-  PUBLIC_LISTING_CONSENT,
+  PROVIDER_ATTESTATION,
   renderText,
   type ConsentDocument,
 } from '../consent'
-import { checkPriceCap, MAX_OCCURRENCE_PRICE_CENTS } from '../money'
 
 const ALL = Object.values(CONSENT_DOCUMENTS)
 
 describe('the documents themselves', () => {
-  it('has the three the legal pass asked for', () => {
+  it('has one attestation for each side', () => {
+    // Three, once: guardian consent, public-listing consent and the
+    // customer attestation. The first two were both about minors.
     expect(Object.keys(CONSENT_DOCUMENTS).sort()).toEqual([
       'customer_attestation',
-      'guardian_consent',
-      'public_listing_consent',
+      'provider_attestation',
     ])
   })
 
@@ -37,24 +37,26 @@ describe('the documents themselves', () => {
     for (const doc of ALL) expect(doc.version, doc.kind).toMatch(/^\d{4}-\d{2}-\d{2}\.\d+$/)
   })
 
-  it('says the things the legal pass required it to say', () => {
-    const guardian = GUARDIAN_CONSENT.items.map((i) => i.key)
-    // Each of these is a specific demand from DECISIONS_AND_DEMANDS.md, and
-    // a wording edit that dropped one would be a silent policy change.
-    for (const key of [
-      'no_background_checks',
-      'private_by_default',
-      'messaging',
-      'personally_does_the_work',
-      'guardian_holds_payouts',
-      'address_sharing',
-      'revocable',
-    ]) {
-      expect(guardian, key).toContain(key)
+  it('says the things this product has to say', () => {
+    // The guardian list was seven specific demands from
+    // DECISIONS_AND_DEMANDS.md, every one of them about a minor: private by
+    // default, the guardian holding payouts, revocability. None survive.
+    //
+    // What both sides must still be told does survive, and a wording edit
+    // that dropped one of these would be a silent policy change: nobody is
+    // checked, and the platform is not in the middle of the money.
+    const provider = PROVIDER_ATTESTATION.items.map((i) => i.key)
+    for (const key of ['is_adult', 'no_background_checks', 'own_arrangement']) {
+      expect(provider, key).toContain(key)
     }
 
     const customer = CUSTOMER_ATTESTATION.items.map((i) => i.key)
-    for (const key of ['is_adult', 'no_background_checks', 'provider_may_be_minor', 'messaging']) {
+    for (const key of [
+      'is_adult',
+      'no_background_checks',
+      'pay_the_provider_directly',
+      'messaging',
+    ]) {
       expect(customer, key).toContain(key)
     }
   })
@@ -75,40 +77,46 @@ describe('the documents themselves', () => {
 
 describe('hashing identifies the document, not the person', () => {
   it('is stable for the same document', () => {
-    expect(canonicalText(GUARDIAN_CONSENT)).toBe(canonicalText(GUARDIAN_CONSENT))
+    expect(canonicalText(PROVIDER_ATTESTATION)).toBe(canonicalText(PROVIDER_ATTESTATION))
   })
 
-  it('does not substitute the minor name before hashing', () => {
-    // Two guardians signing the same version must produce the same hash.
-    expect(canonicalText(GUARDIAN_CONSENT)).toContain('{{minor_name}}')
+  it('is the same text for everybody who signs that version', () => {
+    // Two people signing the same version must produce the same hash, or
+    // the hash identifies the signer rather than the document. Nothing is
+    // templated into these any more -- {{minor_name}} was the only
+    // substitution and it went with the minors -- so this is now a check
+    // that none crept back in.
+    for (const doc of ALL) {
+      expect(canonicalText(doc), doc.kind).not.toMatch(/\{\{/)
+    }
   })
 
   it('changes when any wording changes', () => {
     const edited: ConsentDocument = {
-      ...GUARDIAN_CONSENT,
-      items: GUARDIAN_CONSENT.items.map((i, n) =>
+      ...PROVIDER_ATTESTATION,
+      items: PROVIDER_ATTESTATION.items.map((i, n) =>
         n === 0 ? { ...i, text: `${i.text} And one more thing.` } : i,
       ),
     }
-    expect(canonicalText(edited)).not.toBe(canonicalText(GUARDIAN_CONSENT))
+    expect(canonicalText(edited)).not.toBe(canonicalText(PROVIDER_ATTESTATION))
   })
 
   it('changes when the items are reordered', () => {
     // A different order is a different document to somebody reading it.
     const reordered: ConsentDocument = {
-      ...GUARDIAN_CONSENT,
-      items: [...GUARDIAN_CONSENT.items].reverse(),
+      ...PROVIDER_ATTESTATION,
+      items: [...PROVIDER_ATTESTATION.items].reverse(),
     }
-    expect(canonicalText(reordered)).not.toBe(canonicalText(GUARDIAN_CONSENT))
+    expect(canonicalText(reordered)).not.toBe(canonicalText(PROVIDER_ATTESTATION))
   })
 
   it('changes when the version changes even if nothing else does', () => {
-    const bumped: ConsentDocument = { ...GUARDIAN_CONSENT, version: '2099-01-01.1' }
-    expect(canonicalText(bumped)).not.toBe(canonicalText(GUARDIAN_CONSENT))
+    const bumped: ConsentDocument = { ...PROVIDER_ATTESTATION, version: '2099-01-01.1' }
+    expect(canonicalText(bumped)).not.toBe(canonicalText(PROVIDER_ATTESTATION))
   })
 
   it('distinguishes documents that share text', () => {
-    expect(canonicalText(PUBLIC_LISTING_CONSENT)).not.toBe(canonicalText(GUARDIAN_CONSENT))
+    expect(canonicalText(CUSTOMER_ATTESTATION)).not.toBe(canonicalText(PROVIDER_ATTESTATION))
   })
 })
 
@@ -124,15 +132,15 @@ describe('rendering for display', () => {
 
 describe('every point must be acknowledged', () => {
   it('accepts a full set', () => {
-    const all = GUARDIAN_CONSENT.items.map((i) => i.key)
-    expect(checkAcknowledgements(GUARDIAN_CONSENT, all)).toEqual({ ok: true })
+    const all = PROVIDER_ATTESTATION.items.map((i) => i.key)
+    expect(checkAcknowledgements(PROVIDER_ATTESTATION, all)).toEqual({ ok: true })
   })
 
   it('refuses a partial set, and says how many are left', () => {
     // Itemized consent that accepts a partial set is a blanket consent
     // with extra steps.
-    const all = GUARDIAN_CONSENT.items.map((i) => i.key)
-    const r = checkAcknowledgements(GUARDIAN_CONSENT, all.slice(0, -2))
+    const all = PROVIDER_ATTESTATION.items.map((i) => i.key)
+    const r = checkAcknowledgements(PROVIDER_ATTESTATION, all.slice(0, -2))
     expect(r.ok).toBe(false)
     if (!r.ok) {
       expect(r.missing).toHaveLength(2)
@@ -181,60 +189,46 @@ describe('the price cap', () => {
     // Corrected by the product owner on 2026-08-30: "a $35 weekly
     // lawn-mowing service should be valid. Four completed weekly visits
     // may legitimately total $140 in one billing cycle."
-    const r = checkPriceCap({ priceCents: 3500, priceUnit: 'week', billingCycleWeeks: 4 })
+    const r = checkPriceCap({ priceCents: 3500, priceUnit: 'week' })
     expect(r.ok).toBe(true)
-    // The cycle total is still reported, because a provider pricing at $35
-    // needs to see that the customer is billed $140.
-    expect(r.cycleTotalCents).toBe(14_000)
   })
 
-  it('does not care how long the cycle is', () => {
-    // The old rule made the same price legal or illegal depending on the
-    // cycle length. Nothing about a visit changes because it is billed
-    // fortnightly instead of monthly.
-    for (const weeks of [1, 2, 4, 8]) {
-      expect(
-        checkPriceCap({ priceCents: 3500, priceUnit: 'week', billingCycleWeeks: weeks }).ok,
-        `${weeks} weeks`,
-      ).toBe(true)
-    }
-  })
 
   it('allows exactly the cap', () => {
-    const r = checkPriceCap({ priceCents: MAX_OCCURRENCE_PRICE_CENTS, priceUnit: 'visit', billingCycleWeeks: 4 })
+    const r = checkPriceCap({ priceCents: MAX_OCCURRENCE_PRICE_CENTS, priceUnit: 'visit' })
     expect(r.ok).toBe(true)
   })
 
   it('refuses a cent over', () => {
     expect(
-      checkPriceCap({ priceCents: MAX_OCCURRENCE_PRICE_CENTS + 1, priceUnit: 'visit', billingCycleWeeks: 4 }).ok,
+      checkPriceCap({ priceCents: MAX_OCCURRENCE_PRICE_CENTS + 1, priceUnit: 'visit' }).ok,
     ).toBe(false)
   })
 
   it('refuses a single visit over the cap however short the cycle', () => {
-    expect(checkPriceCap({ priceCents: 5001, priceUnit: 'week', billingCycleWeeks: 1 }).ok).toBe(
+    expect(checkPriceCap({ priceCents: 5001, priceUnit: 'week' }).ok).toBe(
       false,
     )
   })
 
   it('blocks the thousand dollar job the cap exists for', () => {
-    const r = checkPriceCap({ priceCents: 100_000, priceUnit: 'visit', billingCycleWeeks: 1 })
+    const r = checkPriceCap({ priceCents: 100_000, priceUnit: 'visit' })
     expect(r.ok).toBe(false)
   })
 
   it('names the cap in terms of a single visit', () => {
-    const r = checkPriceCap({ priceCents: 9000, priceUnit: 'week', billingCycleWeeks: 4 })
+    const r = checkPriceCap({ priceCents: 9000, priceUnit: 'week' })
     if (!r.ok) {
-      expect(r.message).toContain('$50.00')
+      expect(r.message).toContain('$50')
       expect(r.message).toContain('single visit')
     }
   })
 
   it('counts per-visit and monthly as one occurrence', () => {
-    expect(checkPriceCap({ priceCents: 5000, priceUnit: 'visit', billingCycleWeeks: 4 }).ok).toBe(
+    expect(checkPriceCap({ priceCents: 5000, priceUnit: 'visit' }).ok).toBe(
       true,
     )
-    expect(checkPriceCap({ priceCents: 5000, priceUnit: 'month', billingCycleWeeks: 4 }).ok).toBe(
+    expect(checkPriceCap({ priceCents: 5000, priceUnit: 'month' }).ok).toBe(
       true,
     )
   })

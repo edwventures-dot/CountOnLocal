@@ -8,7 +8,7 @@ import {
   publicRating,
   shouldHideOnReport,
 } from '../review'
-import type { PlainDate } from '../age'
+import type { PlainDate } from '../calendar'
 import type { OccurrenceState } from '../occurrence'
 
 const d = (y: number, m: number, day: number): PlainDate => ({ year: y, month: m, day })

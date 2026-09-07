@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parsePlainDate } from '../age'
+import { parsePlainDate } from '../calendar'
 import {
   toEpochDay,
   fromEpochDay,

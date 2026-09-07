@@ -186,15 +186,6 @@ describe('anybody can file an incident', () => {
     }
   })
 
-  it('notices a minor is involved and recommends telling the guardian', async () => {
-    const r = await file('harassment_or_threat')
-    if (r.ok) {
-      expect(r.guardianNotification.notify).toBe(true)
-      if (r.guardianNotification.notify) {
-        expect(r.guardianNotification.urgency).toBe('immediate')
-      }
-    }
-  })
 
   it('recommends a pause without performing one', async () => {
     const r = await file('physical_safety')
@@ -473,10 +464,6 @@ describe('the queue', () => {
     if (r.ok && r.items.length) expect(r.items.every((i) => i.overdue)).toBe(true)
   })
 
-  it('marks the ones involving a minor', async () => {
-    const r = await incidentQueue({ db: admin, actor: staff, now: NOW })
-    if (r.ok) expect(r.items.some((i) => i.involvesMinor)).toBe(true)
-  })
 })
 
 describe('resolving', () => {

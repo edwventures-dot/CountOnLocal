@@ -73,9 +73,7 @@ export async function GET(request: Request): Promise<Response> {
   if (!gate.allowed) {
     return apiError(
       gate.code,
-      gate.code === 'GUARDIAN_APPROVAL_REQUIRED'
-        ? 'Guardian approval is required to continue.'
-        : 'This account cannot run a route.',
+      'This account cannot run a route.',
       403,
       { requestId },
     )

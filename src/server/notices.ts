@@ -149,7 +149,7 @@ export async function noticeToCustomer(args: {
   customerUserId: string
   now: Date
   idempotencyKey: string
-  kind: 'cycle.settled' | 'subscription.payment_failed'
+  kind: 'subscription.canceled' | 'occurrence.credited'
   subject: string
   preview: string
 }): Promise<void> {

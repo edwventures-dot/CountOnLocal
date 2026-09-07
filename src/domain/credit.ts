@@ -28,7 +28,7 @@
  * library rather than an offset guess.
  */
 
-import type { PlainDate } from './age'
+import type { PlainDate } from './calendar'
 import { toEpochDay } from './schedule'
 
 export type SkipReason =

@@ -35,7 +35,7 @@ export default async function AccountPage() {
 
   const { data: profile } = await db
     .from('provider_profiles')
-    .select('display_first_name, guardian_state')
+    .select('display_first_name')
     .maybeSingle()
 
   return (
@@ -53,8 +53,7 @@ export default async function AccountPage() {
             <p className="muted">
               {profile.display_first_name
                 ? `Set up as ${profile.display_first_name}.`
-                : 'Provider profile started.'}{' '}
-              Guardian status: {profile.guardian_state.replace(/_/g, ' ')}.
+                : 'Provider profile started.'}
             </p>
             <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
               <Link className="btn" href="/today">

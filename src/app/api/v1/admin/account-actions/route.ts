@@ -12,7 +12,7 @@
  */
 
 import { authenticate, clientIp } from '@/server/auth'
-import { applyAccountAction } from '@/server/disputeService'
+import { applyAccountAction } from '@/server/accountActionService'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { apiError, apiOk, newRequestId } from '@/lib/http'
 

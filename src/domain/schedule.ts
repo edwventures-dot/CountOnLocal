@@ -11,8 +11,8 @@
  * moves to Monday twice a year.
  */
 
-import type { PlainDate } from './age'
-import { comparePlainDate, daysInMonth } from './age'
+import type { PlainDate } from './calendar'
+import { comparePlainDate, daysInMonth } from './calendar'
 
 export type Weekday = 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday'
 

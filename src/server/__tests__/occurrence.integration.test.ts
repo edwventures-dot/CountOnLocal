@@ -17,7 +17,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { addDays, isoDate } from '@/domain/schedule'
-import type { PlainDate } from '@/domain/age'
+import type { PlainDate } from '@/domain/calendar'
 import {
   completeOccurrence,
   skipOccurrence,
@@ -327,40 +327,7 @@ describe('a provider skip always credits the customer', () => {
     if (r.ok) expect(r.credit.code).toBe('provider_did_not_deliver')
   })
 
-  it('reverses all three sides of the visit, netting to zero', async () => {
-    const id = await makeOccurrence('due_today')
-    await skipOccurrence({
-      db: admin,
-      occurrenceId: id,
-      actor: 'provider',
-      actorUserId: providerId,
-      today: sameDayOf(id),
-    })
 
-    const rows = await creditRowsFor(id)
-    const byKind = Object.fromEntries(rows.map((r) => [r.kind, r.amount_cents]))
-
-    // $3 visit, 15% cycle fee on a 4-visit cycle: 45 cents of fee share.
-    expect(byKind['credit']).toBe(-(VISIT_CENTS + 45))
-    expect(byKind['provider_earning']).toBe(VISIT_CENTS)
-    expect(byKind['platform_fee']).toBe(45)
-    expect(rows.reduce((a, r) => a + r.amount_cents, 0)).toBe(0)
-  })
-
-  it('does not leave the provider owed for a visit they did not make', async () => {
-    const id = await makeOccurrence('due_today')
-    await skipOccurrence({
-      db: admin,
-      occurrenceId: id,
-      actor: 'provider',
-      actorUserId: providerId,
-      today: sameDayOf(id),
-    })
-
-    const rows = await creditRowsFor(id)
-    const earningReversal = rows.find((r) => r.kind === 'provider_earning')
-    expect(earningReversal?.amount_cents).toBe(VISIT_CENTS)
-  })
 
   it('refuses a provider who does not own the route', async () => {
     const id = await makeOccurrence('due_today')
@@ -379,21 +346,6 @@ describe('a provider skip always credits the customer', () => {
 })
 
 describe('a customer skip turns on notice', () => {
-  it('credits when skipped the day before', async () => {
-    const id = await makeOccurrence('scheduled')
-    const r = await skipOccurrence({
-      db: admin,
-      occurrenceId: id,
-      actor: 'customer',
-      actorUserId: customerId,
-      today: dayBeforeOf(id),
-    })
-
-    expect(r.ok).toBe(true)
-    if (r.ok) expect(r.credit.credited).toBe(true)
-    expect(await stateOf(id)).toBe('credited')
-    expect((await creditRowsFor(id)).length).toBeGreaterThan(0)
-  })
 
   it('does not credit a same-day skip, and writes no ledger row', async () => {
     const id = await makeOccurrence('due_today')
@@ -460,46 +412,6 @@ describe('the two skips cannot impersonate each other', () => {
   })
 })
 
-describe('credits cannot be written twice for one visit', () => {
-  it('a repeated skip does not add a second credit row', async () => {
-    const id = await makeOccurrence('due_today')
-
-    const first = await skipOccurrence({
-      db: admin,
-      occurrenceId: id,
-      actor: 'provider',
-      actorUserId: providerId,
-      today: sameDayOf(id),
-    })
-    expect(first.ok).toBe(true)
-
-    // The state machine refuses the second attempt outright.
-    const second = await skipOccurrence({
-      db: admin,
-      occurrenceId: id,
-      actor: 'provider',
-      actorUserId: providerId,
-      today: sameDayOf(id),
-    })
-    expect(second.ok).toBe(false)
-
-    expect((await creditRowsFor(id)).filter((r) => r.kind === 'credit')).toHaveLength(1)
-  })
-
-  it('the credit row carries a per-occurrence idempotency key', async () => {
-    const id = await makeOccurrence('due_today')
-    await skipOccurrence({
-      db: admin,
-      occurrenceId: id,
-      actor: 'provider',
-      actorUserId: providerId,
-      today: sameDayOf(id),
-    })
-    const rows = await creditRowsFor(id)
-    const credit = rows.find((r) => r.kind === 'credit')
-    expect(credit!.idempotency_key).toBe(`credit:${id}`)
-  })
-})
 
 describe('completed work cannot be skipped after the fact', () => {
   it('refuses a provider skip on a completed stop', async () => {

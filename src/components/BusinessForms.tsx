@@ -14,7 +14,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Alert, Field } from '@/components/ui'
 import { DEFAULT_RADIUS_METRES, describeRadius } from '@/domain/serviceArea'
-import { formatCents, MAX_OCCURRENCE_PRICE_CENTS } from '@/domain/money'
+import { formatCents, MAX_OCCURRENCE_PRICE_CENTS } from '@/domain/pricing'
 
 /**
  * The billing cycle this form creates services on.

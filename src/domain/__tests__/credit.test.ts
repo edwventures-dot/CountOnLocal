@@ -6,7 +6,7 @@ import {
   DEFAULT_SKIP_POLICY,
   type CreditDecision,
 } from '../credit'
-import type { PlainDate } from '../age'
+import type { PlainDate } from '../calendar'
 
 const d = (y: number, m: number, day: number): PlainDate => ({ year: y, month: m, day })
 

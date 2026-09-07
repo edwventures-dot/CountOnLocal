@@ -302,7 +302,7 @@ describe('a repeated event does not queue twice', () => {
     const first = await enqueueNotification({
       db: admin,
       draft: {
-        kind: 'cycle.settled',
+        kind: 'subscription.canceled',
         channel: 'email',
         destination: `outbox-${stamp}-dupe@example.com`,
         subject: 'Your receipt',
@@ -315,7 +315,7 @@ describe('a repeated event does not queue twice', () => {
     const second = await enqueueNotification({
       db: admin,
       draft: {
-        kind: 'cycle.settled',
+        kind: 'subscription.canceled',
         channel: 'email',
         destination: `outbox-${stamp}-dupe@example.com`,
         subject: 'Your receipt',
@@ -350,13 +350,13 @@ describe('suppression', () => {
   })
 
   it('refuses to silence a payment failure', async () => {
-    const r = await enqueue({ kind: 'subscription.payment_failed', subject: 'Payment problem' })
+    const r = await enqueue({ kind: 'safety.alert', subject: 'Payment problem' })
     if (!r.ok) return
 
     const s = await suppressNotification({
       db: admin,
       id: r.id,
-      kind: 'subscription.payment_failed',
+      kind: 'safety.alert',
       reason: 'user opted out',
     })
 

@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import { checkSlug, slugify, uniqueSlug, RESERVED_SLUGS } from '../slug'
 import { canOfferService, flagProhibitedWording, type CatalogService } from '../catalog'
 import { publishBlockers, canPublish, type ServiceReadiness } from '../publish'
-import type { StripeAccountState } from '../payout'
 
 describe('slugs', () => {
   it('derives a readable slug from a business name', () => {
@@ -87,99 +86,40 @@ const tierC: CatalogService = { ...tierA, id: 'cat-c', code: 'future_adult', ris
 const tierX: CatalogService = { ...tierA, id: 'cat-x', code: 'prohibited', riskTier: 'X', active: false }
 
 describe('catalog eligibility', () => {
-  it('lets a verified minor offer a Tier A service', () => {
-    expect(
-      canOfferService({
-        service: tierA,
-        ageInYears: 14,
-        band: 'minor',
-        guardianState: 'verified',
-        guardianApprovedCodes: [],
-      }),
-    ).toEqual({ allowed: true })
+  // Three inputs collapsed to one when minors went: an age in years, an age
+  // band, and the codes a guardian had approved for that specific provider.
+  // What is left is whether the row is offerable at all.
+
+  it('lets a provider offer a Tier A service', () => {
+    expect(canOfferService({ service: tierA })).toEqual({ allowed: true })
   })
 
-  it('requires explicit guardian approval of the category for Tier B', () => {
-    // A parent who agreed to bin service has not agreed to dog walking.
-    expect(
-      canOfferService({
-        service: tierB,
-        ageInYears: 14,
-        band: 'minor',
-        guardianState: 'verified',
-        guardianApprovedCodes: ['bin_curb_service'],
-      }),
-    ).toEqual({ allowed: false, code: 'CATEGORY_NOT_APPROVED_BY_GUARDIAN' })
-
-    expect(
-      canOfferService({
-        service: tierB,
-        ageInYears: 14,
-        band: 'minor',
-        guardianState: 'verified',
-        guardianApprovedCodes: ['dog_walking'],
-      }),
-    ).toEqual({ allowed: true })
+  it('no longer treats Tier B as needing anybody else to agree', () => {
+    // This was the per-category guardian approval: a parent who agreed to
+    // bin service had not thereby agreed to their child walking strangers'
+    // dogs. There is no parent and no child.
+    expect(canOfferService({ service: tierB })).toEqual({ allowed: true })
   })
 
-  it('does not require per-category approval from an adult', () => {
-    expect(
-      canOfferService({
-        service: tierB,
-        ageInYears: 25,
-        band: 'adult',
-        guardianState: 'not_required',
-        guardianApprovedCodes: [],
-      }),
-    ).toEqual({ allowed: true })
-  })
-
-  it('blocks a minor from a Tier C adult-only category', () => {
-    expect(
-      canOfferService({
-        service: tierC,
-        ageInYears: 17,
-        band: 'minor',
-        guardianState: 'verified',
-        guardianApprovedCodes: ['future_adult'],
-      }),
-    ).toEqual({ allowed: false, code: 'ADULT_ONLY_CATEGORY' })
+  it('lets a provider offer a Tier C category that used to be adult-only', () => {
+    expect(canOfferService({ service: tierC })).toEqual({ allowed: true })
   })
 
   it('blocks Tier X even if a row is mistakenly marked active', () => {
-    expect(
-      canOfferService({
-        service: { ...tierX, active: true },
-        ageInYears: 30,
-        band: 'adult',
-        guardianState: 'not_required',
-        guardianApprovedCodes: [],
-      }),
-    ).toEqual({ allowed: false, code: 'SERVICE_NOT_AVAILABLE' })
+    // The one check that was always doing real work. Tier X is prohibited
+    // outright, and an inactive-check alone would let a bad row through.
+    const mistakenlyActive = { ...tierX, active: true }
+    expect(canOfferService({ service: mistakenlyActive })).toEqual({
+      allowed: false,
+      code: 'SERVICE_NOT_AVAILABLE',
+    })
   })
 
-  it('enforces a catalog minimum age above 13', () => {
-    expect(
-      canOfferService({
-        service: { ...tierA, minProviderAge: 16 },
-        ageInYears: 15,
-        band: 'minor',
-        guardianState: 'verified',
-        guardianApprovedCodes: [],
-      }),
-    ).toEqual({ allowed: false, code: 'PROVIDER_TOO_YOUNG' })
-  })
-
-  it('blocks an unverified minor before any category question', () => {
-    expect(
-      canOfferService({
-        service: tierA,
-        ageInYears: 14,
-        band: 'minor',
-        guardianState: 'revoked',
-        guardianApprovedCodes: [],
-      }),
-    ).toEqual({ allowed: false, code: 'GUARDIAN_APPROVAL_REQUIRED' })
+  it('blocks an inactive row whatever its tier', () => {
+    expect(canOfferService({ service: { ...tierA, active: false } })).toEqual({
+      allowed: false,
+      code: 'SERVICE_NOT_AVAILABLE',
+    })
   })
 })
 
@@ -211,12 +151,6 @@ describe('prohibited wording is flagged, not silently accepted', () => {
   })
 })
 
-const READY_ACCOUNT: StripeAccountState = {
-  accountId: 'acct_1',
-  transfersActive: true,
-  payoutsActive: true,
-  requirementsDue: [],
-}
 const goodService: ServiceReadiness = {
   id: 's1',
   state: 'active',
@@ -227,9 +161,6 @@ const goodService: ServiceReadiness = {
 
 function publishInput(over: Partial<Parameters<typeof publishBlockers>[0]> = {}) {
   return {
-    band: 'minor' as const,
-    guardianState: 'verified' as const,
-    account: READY_ACCOUNT,
     businessState: 'draft',
     publicAreaLabel: 'Oak Ridge',
     services: [goodService],
@@ -238,33 +169,21 @@ function publishInput(over: Partial<Parameters<typeof publishBlockers>[0]> = {})
 }
 
 describe('publish readiness', () => {
-  it('allows a complete, verified, payout-ready business', () => {
+  it('allows a complete business', () => {
     expect(canPublish(publishInput())).toEqual({ allowed: true })
   })
 
   it('reports every blocker at once rather than one per attempt', () => {
     const blockers = publishBlockers(
       publishInput({
-        guardianState: 'invited',
-        account: { ...READY_ACCOUNT, payoutsActive: false },
         publicAreaLabel: null,
         services: [],
       }),
     )
-    expect(blockers).toContain('GUARDIAN_APPROVAL_REQUIRED')
-    expect(blockers).toContain('PAYOUT_ONBOARDING_INCOMPLETE')
     expect(blockers).toContain('NO_ACTIVE_SERVICE')
     expect(blockers).toContain('BUSINESS_MISSING_AREA_LABEL')
   })
 
-  it('puts the guardian blocker before the money one', () => {
-    const blockers = publishBlockers(
-      publishInput({ guardianState: 'invited', account: { ...READY_ACCOUNT, payoutsActive: false } }),
-    )
-    expect(blockers.indexOf('GUARDIAN_APPROVAL_REQUIRED')).toBeLessThan(
-      blockers.indexOf('PAYOUT_ONBOARDING_INCOMPLETE'),
-    )
-  })
 
   it('does not count a draft or paused service as active', () => {
     expect(
@@ -284,11 +203,6 @@ describe('publish readiness', () => {
     ).toContain('SERVICE_MISSING_SCHEDULE')
   })
 
-  it('refuses an under-age provider without listing anything else', () => {
-    expect(publishBlockers(publishInput({ band: 'under_min_age' }))).toEqual([
-      'PROVIDER_INELIGIBLE',
-    ])
-  })
 
   it('reports an already-published business as such', () => {
     expect(publishBlockers(publishInput({ businessState: 'published' }))).toEqual([
@@ -296,9 +210,4 @@ describe('publish readiness', () => {
     ])
   })
 
-  it('blocks a revoked guardian even when everything else is complete', () => {
-    expect(publishBlockers(publishInput({ guardianState: 'revoked' }))).toContain(
-      'GUARDIAN_APPROVAL_REQUIRED',
-    )
-  })
 })

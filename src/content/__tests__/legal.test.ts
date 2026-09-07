@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { anyDraft, LEGAL_DOCUMENTS, legalDocument } from '../legal'
-import { MAX_OCCURRENCE_PRICE_CENTS } from '@/domain/money'
+import { MAX_OCCURRENCE_PRICE_CENTS } from '@/domain/pricing'
 import { RETENTION } from '@/domain/retention'
 
 /**

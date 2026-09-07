@@ -2,16 +2,10 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { authenticate } from '@/server/auth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { getPayoutStatus } from '@/server/connectOnboarding'
 import { onboardingStage, onboardingSteps } from '@/domain/onboarding'
-import { classifyAge, parsePlainDate } from '@/domain/age'
-import { todayUtc } from '@/server/providerOnboarding'
 import { ProviderDetailsForm } from '@/components/ProviderDetailsForm'
-import { GuardianInviteForm } from '@/components/GuardianInviteForm'
-import { PayoutStart } from '@/components/PayoutStart'
 import { SignOutButton } from '@/components/SignOutButton'
 import { Alert, Card, Shell, Stack } from '@/components/ui'
-import type { GuardianState } from '@/domain/guardian'
 
 export const metadata = { title: 'Start a service | Count On Local' }
 export const dynamic = 'force-dynamic'
@@ -40,27 +34,12 @@ export default async function StartPage() {
 
   const { data: profile } = await db
     .from('provider_profiles')
-    .select('display_first_name, date_of_birth, guardian_state')
+    .select('display_first_name')
     .eq('user_id', userId)
     .maybeSingle()
+  const stage = onboardingStage({ hasProviderProfile: Boolean(profile) })
 
-  const payout = profile
-    ? await getPayoutStatus({ db, providerUserId: userId, now: new Date() })
-    : null
-
-  const guardianState = (profile?.guardian_state ?? null) as GuardianState | null
-  const stage = onboardingStage({
-    hasProviderProfile: Boolean(profile),
-    guardianState,
-    payoutReady: payout?.ok ? payout.status.canReceivePayments : false,
-  })
-
-  // Derived rather than stored. There is no is_minor column to tamper with.
-  const guardianRequired = profile
-    ? classifyAge(parsePlainDate(profile.date_of_birth), todayUtc(new Date())) === 'minor'
-    : false
-
-  const steps = onboardingSteps({ stage, guardianRequired })
+  const steps = onboardingSteps({ stage })
 
   return (
     <Shell nav={<SignOutButton />} narrow>
@@ -81,34 +60,13 @@ export default async function StartPage() {
         </Card>
       ) : null}
 
-      {stage === 'guardian' ? (
-        <Stack>
-          <Card>
-            <h2>Guardian approval</h2>
-            <GuardianStatus state={guardianState} />
-            <GuardianInviteForm alreadyInvited={guardianState === 'invited'} />
-          </Card>
-          <p className="small muted">
-            You can <Link href="/business">build your service page</Link> while you wait. You just
-            cannot take a paying customer until your guardian is verified.
-          </p>
-        </Stack>
-      ) : null}
-
-      {stage === 'payouts' ? (
-        <Card>
-          <h2>Getting paid</h2>
-          <PayoutStart holder={guardianRequired ? 'guardian' : 'self'} />
-        </Card>
-      ) : null}
-
       {stage === 'ready' ? (
         <Stack>
           <Card>
             <h2>You are set up</h2>
             <p className="muted" style={{ marginBottom: 0 }}>
               {profile?.display_first_name ? `Nice one, ${profile.display_first_name}. ` : ''}
-              Your account can take a paying customer.
+              Your account is ready. Build your page and share it with your neighbours.
             </p>
           </Card>
           <Link className="btn" href="/business">
@@ -123,53 +81,3 @@ export default async function StartPage() {
   )
 }
 
-/**
- * What the guardian relationship is doing, in words.
- *
- * `manual_review` deliberately does not tell the provider what triggered it.
- * SAFETY_TRUST_POLICY keeps the detail of a review with the staff running
- * it -- telling somebody which signal tripped is telling them what to avoid
- * next time.
- */
-function GuardianStatus({ state }: { state: GuardianState | null }) {
-  switch (state) {
-    case 'invited':
-      return (
-        <Alert kind="info">
-          We have sent the request. Nothing happens until they open it and approve.
-        </Alert>
-      )
-    case 'guardian_started':
-      return (
-        <Alert kind="info">
-          They have started. There is one more step on their side before you can take customers.
-        </Alert>
-      )
-    case 'revoked':
-      return (
-        <Alert kind="error">
-          Your guardian withdrew their approval. New customers and charges have stopped. Talk to
-          them, then send a new request below.
-        </Alert>
-      )
-    case 'expired':
-      return (
-        <Alert kind="error">
-          That request expired before it was opened. Send a new one below.
-        </Alert>
-      )
-    case 'manual_review':
-      return (
-        <Alert kind="info">
-          Someone on our team is reviewing this account. We will be in touch.
-        </Alert>
-      )
-    default:
-      return (
-        <p className="muted">
-          You are under 18, so a parent or guardian has to approve your account before anyone can
-          pay you. It takes them a couple of minutes.
-        </p>
-      )
-  }
-}

@@ -55,3 +55,8 @@ export function checkPriceCap(args: {
     message: `The most a single ${args.priceUnit === 'week' ? 'visit' : args.priceUnit} can be priced at is ${dollars}.`,
   }
 }
+
+/** Cents as a plain dollar amount, no unit suffix. */
+export function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`
+}

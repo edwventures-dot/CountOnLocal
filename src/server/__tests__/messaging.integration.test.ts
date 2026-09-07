@@ -205,10 +205,6 @@ afterAll(async () => {
 })
 
 describe('the thread is the business relationship', () => {
-  it('detects that a minor is party to it', async () => {
-    const thread = await ensureThread({ db: admin, subscriptionId, now: NOW })
-    expect(thread!.involvesMinor).toBe(true)
-  })
 
   it('is created once, not once per message', async () => {
     const a = await ensureThread({ db: admin, subscriptionId, now: NOW })
@@ -290,15 +286,6 @@ describe('a blocked message is unreadable, not merely flagged', () => {
     expect(data![0]!.urgent).toBe(true)
   })
 
-  it('escalates prohibited work because a minor is in the thread', async () => {
-    await send('could you watch my kids on Thursday')
-    const { data } = await admin
-      .from('messages')
-      .select('urgent')
-      .eq('thread_id', threadId)
-      .eq('violation_code', 'prohibited_work')
-    expect(data![0]!.urgent).toBe(true)
-  })
 
   it('does not tell the sender which pattern matched', async () => {
     const r = await send('just venmo me')
@@ -337,26 +324,6 @@ describe('reporting', () => {
     expect(r.ok).toBe(true)
   })
 
-  it('marks it urgent because a minor is in the thread', async () => {
-    const sent = await send('Another one.', provider)
-    if (!sent.ok) return
-
-    await reportMessage({
-      db: admin,
-      messageId: sent.messageId,
-      reporterUserId: customer.domainId,
-      reason: 'uncomfortable',
-      now: NOW,
-    })
-
-    const { data } = await admin
-      .from('messages')
-      .select('urgent, reported_at')
-      .eq('id', sent.messageId)
-      .single()
-    expect(data!.urgent).toBe(true)
-    expect(data!.reported_at).toBeTruthy()
-  })
 
   it('extends the retention clock, because it is evidence now', async () => {
     const sent = await send('Third one.', provider)

@@ -52,10 +52,6 @@ export async function POST(req: Request): Promise<Response> {
   })
 
   if (!result.ok) {
-    if (result.code === 'PROVIDER_INELIGIBLE') {
-      const d = DENIAL_RESPONSES['PROVIDER_INELIGIBLE']!
-      return apiError(result.code, d.message, d.status, { requestId })
-    }
     if (result.code === 'ALREADY_ONBOARDED') {
       return apiError(result.code, 'This account already has a provider profile.', 409, {
         requestId,
@@ -66,6 +62,5 @@ export async function POST(req: Request): Promise<Response> {
 
   return apiOk({
     nextStage: result.nextStage,
-    guardianRequired: result.guardianRequired,
-  })
+      })
 }

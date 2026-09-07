@@ -28,7 +28,8 @@ import {
 } from '@/domain/credit'
 import type { PriceUnit } from '@/domain/pricing'
 import { writeAudit } from '@/server/audit'
-import type { PlainDate } from '@/domain/age'
+import { noticeToCustomer } from '@/server/notices'
+import type { PlainDate } from '@/domain/calendar'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
@@ -276,6 +277,28 @@ export async function skipOccurrence(args: {
   if (error) {
     console.error('[occurrence] skip failed', error.message)
     return { ok: false, code: 'WRITE_FAILED', message: 'Could not save that. Try again.' }
+  }
+
+  // The customer is told a visit they were expecting is not happening.
+  //
+  // In the full product this was implicit in the money: a credit appeared
+  // on their next bill and the amount explained itself. With nothing to
+  // bill, a skipped visit that nobody mentions is somebody waiting at home
+  // on Tuesday for a provider who was never coming.
+  if (credit.credited) {
+    await noticeToCustomer({
+      db,
+      subscriptionId: occ.subscriptionId,
+      customerUserId: occ.customerUserId,
+      // The skip path takes a calendar date rather than an instant, because
+      // a service date is a civil-calendar question. The outbox needs a
+      // timestamp, and "when this was queued" is genuinely now.
+      now: new Date(),
+      idempotencyKey: `skipped:${occ.id}`,
+      kind: 'occurrence.credited',
+      subject: 'A visit was skipped',
+      preview: 'One of your scheduled visits is not going ahead. It does not count towards what you owe.',
+    })
   }
 
   // A skipped visit used to post three ledger entries: the customer's
