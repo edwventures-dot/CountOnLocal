@@ -13,13 +13,23 @@
  * claim: it promises less about who is using the product. A banner that
  * under-claims during an outage is a smaller problem than one that
  * announces a pilot that is not running.
+ *
+ * ## Read with the user-scoped client, not the admin one
+ *
+ * The legal pages are public and unauthenticated -- they are three of the
+ * five paths the pre-launch gate lets through. Instantiating a service-role
+ * client on a path a stranger can hit is more privilege than the question
+ * needs, and the question needs none: migration 0040 grants anon SELECT on
+ * platform_settings with a `using (true)` policy, because a posture flag is
+ * not a secret. So this reads it as anybody would.
  */
 
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 export async function pilotRunning(): Promise<boolean> {
   try {
-    const { data, error } = await supabaseAdmin()
+    const db = await createSupabaseServerClient()
+    const { data, error } = await db
       .from('platform_settings')
       .select('value')
       .eq('key', 'pilot_invite_only')
