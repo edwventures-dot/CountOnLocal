@@ -41,6 +41,10 @@ export type Permission =
   // staff actions
   | 'incident:manage'
   | 'moderation:act'
+  // Deciding whether a 13-to-17-year-old may start. Staff only: this is
+  // the gate a signed guardian consent now stops at, and it is not the
+  // guardian's own decision to make -- they already made theirs.
+  | 'guardian:review'
   | 'account:suspend'
   | 'payout:hold'
   | 'payout:release'
@@ -87,6 +91,7 @@ const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'address:read_customer',
     'identity:read_sensitive',
     'payout:hold',
+    'guardian:review',
   ],
 
   finance_admin: ['payout:hold', 'payout:release', 'refund:issue', 'audit:read'],
@@ -99,6 +104,7 @@ const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'account:suspend',
     'moderation:act',
     'incident:manage',
+    'guardian:review',
   ],
 }
 
@@ -118,6 +124,7 @@ export const AUDITED_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>(
   'address:read_customer',
   'identity:read_sensitive',
   'guardian:revoke',
+  'guardian:review',
   'account:suspend',
   'payout:hold',
   'payout:release',

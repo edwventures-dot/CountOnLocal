@@ -32,6 +32,8 @@ export const AUDIT_ACTIONS = [
   'guardian.revoked',
   'guardian.expired',
   'guardian.flagged_for_review',
+  'guardian.review_approved',
+  'guardian.review_denied',
   'guardian.aged_out',
   'provider.onboarding_started',
   'provider.registration_refused',

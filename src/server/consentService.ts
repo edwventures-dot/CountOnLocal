@@ -41,6 +41,7 @@ import {
 } from '@/domain/consent'
 import { transition } from '@/domain/guardian'
 import { writeAudit } from '@/server/audit'
+import { guardianManualReviewEnabled } from '@/server/guardianReview'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 
@@ -140,10 +141,25 @@ export async function recordConsent(args: {
 }
 
 /**
- * Moves the relationship to verified, because a consent now backs it.
+ * Advances the relationship, because a consent now backs it.
  *
  * Scoped to the signer's own relationship: a guardian cannot verify a
  * relationship they are not party to, whatever subject id they send.
+ *
+ * ## Where it advances TO depends on policy
+ *
+ * With guardian_manual_review on -- the default, see migration 0044 -- a
+ * signed consent moves the relationship to `manual_review` rather than
+ * `verified`. The minor still cannot accept a paying customer, because
+ * that gate has always been `verified` and nothing about it moved. What
+ * changed is that a person now stands between the signature and the first
+ * customer.
+ *
+ * The consent record is untouched by this. It is still written, still
+ * immutable, still the artifact saying exactly what was agreed. It simply
+ * stops being the last step.
+ *
+ * With the setting off, this behaves as it always did.
  */
 async function verifyRelationship(args: {
   db: Db
@@ -162,7 +178,10 @@ async function verifyRelationship(args: {
     return { ok: false, code: 'NO_RELATIONSHIP', message: 'No guardian relationship to confirm.' }
   }
 
-  const moved = transition(rel.state as never, 'VERIFY')
+  const reviewed = await guardianManualReviewEnabled(args.db)
+  const event = reviewed ? 'FLAG_FOR_REVIEW' : 'VERIFY'
+
+  const moved = transition(rel.state as never, event)
   if (!moved.ok) {
     return {
       ok: false,
@@ -190,7 +209,7 @@ async function verifyRelationship(args: {
   await writeAudit({
     actorUserId: args.guardianUserId,
     actorRole: 'guardian',
-    action: 'guardian.verified',
+    action: reviewed ? 'guardian.flagged_for_review' : 'guardian.verified',
     targetType: 'guardian_relationship',
     targetId: rel.id,
     before: { state: rel.state },

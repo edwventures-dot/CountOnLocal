@@ -107,6 +107,7 @@ const TERMS: LegalDocument = {
         'Customers must be 18 or over. You confirm this when you subscribe. We ask you to confirm it; we do not verify anybody’s age.',
         'Providers must be 13 or over. A provider aged 13 to 17 cannot accept a paying customer until a parent or guardian has connected to their account and given consent, item by item, and signed it with their full legal name.',
         'A provider cannot act as their own guardian. Guardian consent is recorded as a signed, unalterable record.',
+        'A provider aged 13 to 17 is also reviewed by a person before they can accept a customer. Guardian consent begins that review; it does not complete it.',
       ],
       needsCounsel:
         'Confirm whether a 13-to-17-year-old may contract through this structure in each launch state; whether the guardian should become a party to the provider agreement rather than only consent; what terms can be enforced against the minor; and what youth-employment or work-permit restrictions apply if any provider relationship is treated as employment.',
@@ -315,6 +316,7 @@ const SAFETY: LegalDocument = {
       body: [
         'The minimum age to provide a service is 13. This is enforced when the account is created and again in the database, so it cannot be worked around.',
         'A provider aged 13 to 17 cannot take a paying customer until a parent or guardian has connected to their account and consented.',
+        'Consent alone is not enough. After a guardian signs, somebody from Count On Local meets the family before that provider can start. We do this in person wherever we can, and we write down who we met and what we decided. A form cannot tell whether a young person actually wants to do this, or whether the adult understood what they agreed to; a conversation can.',
         'That consent is itemised: eleven separate points, each acknowledged individually, signed with the guardian’s full legal name. We store the exact wording they agreed to, so what was consented to is answerable years later.',
         'A guardian can withdraw consent at any time, and it takes effect immediately.',
         'A provider cannot be their own guardian.',

@@ -146,6 +146,34 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['platform_settings']['Insert']>
         Relationships: []
       }
+      guardian_reviews: {
+        Row: {
+          id: string
+          relationship_id: string
+          provider_user_id: string
+          guardian_user_id: string
+          decision: string
+          reason: string
+          met_in_person: boolean
+          present: string | null
+          reviewed_by_user_id: string
+          reviewed_at: string
+        }
+        Insert: {
+          id?: string
+          relationship_id: string
+          provider_user_id: string
+          guardian_user_id: string
+          decision: string
+          reason: string
+          met_in_person: boolean
+          present?: string | null
+          reviewed_by_user_id: string
+          reviewed_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['guardian_reviews']['Insert']>
+        Relationships: []
+      }
       pilot_invites: {
         Row: {
           email: string

@@ -65,7 +65,6 @@ const allSource = sourceFiles(SRC)
  * else would accept.
  */
 const AUDIT_NOT_YET_WIRED: Readonly<Record<string, string>> = {
-  'guardian.flagged_for_review': 'manual_review is a reachable guardian state; nothing routes into it yet',
   'guardian.category_approved': 'per-category guardian approval is designed but not built',
   'guardian.category_revoked': 'per-category guardian approval is designed but not built',
   'payout.account_ready': 'the Connect sync updates columns; it does not yet log the transition',
