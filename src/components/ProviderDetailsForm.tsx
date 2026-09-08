@@ -75,15 +75,19 @@ export function ProviderDetailsForm() {
         onChange={(e) => setFirstName(e.target.value)}
       />
 
-      <label className="check">
-        <input
-          type="checkbox"
-          name="isAdult"
-          checked={isAdult}
-          onChange={(e) => setIsAdult(e.target.checked)}
-        />
-        <span>I am 18 or older.</span>
-      </label>
+      {/* Same real classes as the customer attestation, for the same
+          reason: a 24px target on the one box that gates everything else. */}
+      <fieldset className="attest">
+        <label className="attest__item">
+          <input
+            type="checkbox"
+            name="isAdult"
+            checked={isAdult}
+            onChange={(e) => setIsAdult(e.target.checked)}
+          />
+          <span>I am 18 or older.</span>
+        </label>
+      </fieldset>
 
       <button className="btn btn--full" type="submit" disabled={busy}>
         {busy ? 'Saving…' : 'Continue'}

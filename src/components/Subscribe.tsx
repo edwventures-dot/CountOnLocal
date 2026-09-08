@@ -301,8 +301,12 @@ export function Subscribe({
             onChange={(e) => setDogName(e.target.value)}
           />
           <label className="field">
-            <span>Size</span>
-            <select value={dogSize} onChange={(e) => setDogSize(e.target.value)}>
+            <span className="field__label">Size</span>
+            <select
+              className="field__input"
+              value={dogSize}
+              onChange={(e) => setDogSize(e.target.value)}
+            >
               {DOG_SIZES.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -319,8 +323,15 @@ export function Subscribe({
             onChange={(e) => setDogRestraint(e.target.value)}
           />
           <label className="field">
-            <span>Have they ever bitten anyone?</span>
-            <select value={dogBite} onChange={(e) => setDogBite(e.target.value)}>
+            <span className="field__label">Has this dog ever bitten anyone?</span>
+            <span className="field__hint">
+              Including another animal. &ldquo;Not sure&rdquo; is a real answer and a useful one.
+            </span>
+            <select
+              className="field__input"
+              value={dogBite}
+              onChange={(e) => setDogBite(e.target.value)}
+            >
               {BITE_HISTORY.map((b) => (
                 <option key={b} value={b}>
                   {b}
@@ -340,11 +351,18 @@ export function Subscribe({
         onChange={(e) => setInstructions(e.target.value)}
       />
 
-      <div className="stack">
-        <h3>{DOC.title}</h3>
-        <p className="small muted">{DOC.intro}</p>
+      {/*
+        `attest` and `attest__item` are real classes in globals.css, with the
+        24px checkbox the UX spec asks for and a rule between each point.
+        This was written with an invented `check` class instead, so all six
+        points ran together as one paragraph -- the exact screen where
+        somebody is supposed to read each line separately.
+      */}
+      <fieldset className="attest">
+        <legend className="field__label">{DOC.title}</legend>
+        <p className="field__hint">{DOC.intro}</p>
         {DOC.items.map((item) => (
-          <label key={item.key} className="check">
+          <label key={item.key} className="attest__item">
             <input
               type="checkbox"
               checked={acknowledged.includes(item.key)}
@@ -357,15 +375,17 @@ export function Subscribe({
             <span>{item.text}</span>
           </label>
         ))}
-        <Field
-          label="Type your full name to agree"
-          name="typedName"
-          required
-          value={typedName}
-          onChange={(e) => setTypedName(e.target.value)}
-        />
-        <p className="small muted">{DOC.statement}</p>
-      </div>
+      </fieldset>
+
+      <Field
+        label="Type your full name to agree"
+        name="typedName"
+        hint={DOC.statement}
+        autoComplete="name"
+        required
+        value={typedName}
+        onChange={(e) => setTypedName(e.target.value)}
+      />
 
       <button
         className="btn btn--full"

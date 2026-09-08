@@ -42,7 +42,11 @@ export function LegalPage({ doc, pilot = false }: { doc: LegalDocument; pilot?: 
 
   return (
     <div className="legal">
-      <header className="legal__head">
+      {/* No class: the brand, title, summary and meta each carry their own
+          spacing, so a wrapper class here styled nothing. It was named in
+          the markup and absent from globals.css, which is the same shape of
+          mistake as the invented `check` class, just harmless. */}
+      <header>
         <Link className="legal__brand" href="/">
           Count On Local
         </Link>
