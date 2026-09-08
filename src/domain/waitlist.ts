@@ -21,7 +21,7 @@
  * household.
  */
 
-export const WAITLIST_ROLES = ['provider', 'customer', 'guardian'] as const
+export const WAITLIST_ROLES = ['provider', 'customer'] as const
 
 export type WaitlistRole = (typeof WAITLIST_ROLES)[number]
 

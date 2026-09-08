@@ -139,16 +139,15 @@ export default function Home() {
         </section>
 
         <section style={{ ...S.section, ...S.guardian }}>
-          <h2 style={{ ...S.h2, marginTop: 0 }}>They run the business. You stay connected.</h2>
+          <h2 style={{ ...S.h2, marginTop: 0 }}>Free, and not in the middle of your money.</h2>
           <p style={S.body}>
-            A provider aged 13 to 17 needs a parent or guardian connected before they can take a
-            paying customer. Guardians approve which services are allowed, see the service area and
-            the scheduled work, get alerted to new customers and incidents, and can pause the
-            business immediately.
+            Count On Local does not take payment and does not take a cut. A provider sets their
+            price, the page shows it, and the two of you settle it directly — cash, transfer,
+            whatever you already use between neighbours.
           </p>
           <p style={{ ...S.body, marginBottom: 0 }}>
-            A provider&apos;s home address, school, exact age and private schedule are never public,
-            and a customer&apos;s address is only ever shown to the provider doing the work.
+            What we keep is the boring part: who is on the round, which day, and what still needs
+            doing. A customer&apos;s address is only ever shown to the provider doing the work.
           </p>
         </section>
 

@@ -44,7 +44,7 @@ describe('validateWaitlistSignup', () => {
   })
 
   it('keeps only the first five digits of ZIP+4', () => {
-    const r = validateWaitlistSignup({ email: 'a@b.co', role: 'guardian', postalCode: '84043-1234' })
+    const r = validateWaitlistSignup({ email: 'a@b.co', role: 'customer', postalCode: '84043-1234' })
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.value.postalCode).toBe('84043')
   })

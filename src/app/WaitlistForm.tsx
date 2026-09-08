@@ -14,7 +14,6 @@ import { BORDER, CORAL, GREEN, INK, LIME, MUTED, RADIUS_CONTROL, WHITE } from '@
 const ROLE_LABEL: Record<WaitlistRole, string> = {
   provider: 'I want to start a business',
   customer: 'I want to hire local help',
-  guardian: 'I am a parent or guardian',
 }
 
 type Status = 'idle' | 'sending' | 'done' | 'error'
@@ -149,8 +148,8 @@ export function WaitlistForm() {
       ) : null}
 
       <p style={S.fine}>
-        Providers must be 13 or older, and 13 to 17 needs a parent or guardian connected before any
-        paid work. We will not share your address with anyone.
+        You must be 18 or older to use Count On Local, whether you are providing a service or
+        hiring one. We will not share your address with anyone.
       </p>
     </form>
   )
