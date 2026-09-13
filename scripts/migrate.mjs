@@ -80,6 +80,21 @@ async function main() {
     )
   `)
 
+  // Locked the same way every table in migrations/ is, because this one is
+  // created here rather than there and was the one table left out. It sits
+  // in the public schema, so without this the Data API served every
+  // migration filename to anyone holding the anon key -- which is public by
+  // design. Found by asking the API for it: 46 rows came back.
+  //
+  // This script connects as postgres, which bypasses RLS, so nothing it
+  // does is affected. Idempotent, so it runs on every invocation and closes
+  // the gap on any project this has already been pointed at.
+  await client.query(`
+    alter table schema_migrations enable row level security;
+    alter table schema_migrations force row level security;
+    revoke all on schema_migrations from anon, authenticated;
+  `)
+
   const { rows: applied } = await client.query('select name, checksum from schema_migrations')
   const appliedByName = new Map(applied.map((r) => [r.name, r.checksum]))
 
