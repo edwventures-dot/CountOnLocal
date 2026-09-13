@@ -36,7 +36,18 @@ const anon = createClient<Database>(url, anonKey, {
 })
 
 const stamp = Date.now()
-const NOW = new Date('2026-09-10T18:00:00Z')
+/**
+ * A day ahead of the real clock, not a fixed date.
+ *
+ * `enqueue()` below does not pass a clock, so every row is stamped with the
+ * real time, and the dispatcher only takes rows due at or before the `now`
+ * it is given. This was `new Date('2026-09-10T18:00:00Z')` -- "far in the
+ * future" on the day it was written -- and on 11 September it silently
+ * became the past. Every freshly queued row was then due after NOW, the
+ * dispatcher claimed nothing, and eight tests failed at once without any
+ * code having changed. Relative to the real clock, it cannot expire.
+ */
+const NOW = new Date(Date.now() + 24 * 60 * 60 * 1000)
 
 let notifier: StubNotifier
 const madeIds: string[] = []

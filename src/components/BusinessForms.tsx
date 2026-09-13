@@ -241,8 +241,8 @@ export function AddServiceForm({
         min="0.50"
         hint={
           Number.isFinite(perCycleCents) && perCycleCents > 0
-            ? `You keep all of this. The most one visit can be priced at is ${formatCents(MAX_OCCURRENCE_PRICE_CENTS)}. Billed every ${WEEKS_PER_CYCLE} weeks, so a customer is charged ${formatCents(perCycleCents)} at a time, plus a small platform fee.`
-            : `You keep all of this. The most one visit can be priced at is ${formatCents(MAX_OCCURRENCE_PRICE_CENTS)}.`
+            ? `Customers pay you directly; Count On Local takes nothing. The most one visit can be priced at is ${formatCents(MAX_OCCURRENCE_PRICE_CENTS)}. Over ${WEEKS_PER_CYCLE} weeks that comes to ${formatCents(perCycleCents)} per customer.`
+            : `Customers pay you directly; Count On Local takes nothing. The most one visit can be priced at is ${formatCents(MAX_OCCURRENCE_PRICE_CENTS)}.`
         }
         required
         value={price}

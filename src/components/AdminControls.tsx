@@ -6,8 +6,8 @@
  * ## The reason field is not a formality
  *
  * checkReason refuses anything under 20 characters, and this form does not
- * try to soften that. The person who reads it later is deciding whether a
- * teenager was treated fairly, and "fraud?" tells them nothing. The button
+ * try to soften that. The person who reads it later is deciding whether
+ * somebody was treated fairly, and "fraud?" tells them nothing. The button
  * stays disabled until there is something worth logging, so the refusal
  * happens before the action rather than after it.
  *
@@ -17,7 +17,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Alert } from '@/components/ui'
-import { MIN_REASON_LENGTH, REFUND_REASON_THRESHOLD_CENTS } from '@/domain/incident'
+import { MIN_REASON_LENGTH } from '@/domain/incident'
 
 function useStaffAction() {
   const router = useRouter()
@@ -138,84 +138,11 @@ export function ResolveIncident({ incidentId }: { incidentId: string }) {
 }
 
 /**
- * A fast refund.
- *
- * No reason field below the threshold, deliberately. Demanding one for a
- * $3 credit trains staff to type filler, and the whole point of this
- * control is being quicker than the customer's bank.
- */
-export function IssueRefund() {
-  const { error, busy, call } = useStaffAction()
-  const [subscriptionId, setSubscriptionId] = useState('')
-  const [amount, setAmount] = useState('')
-  const [reason, setReason] = useState('')
-  const [done, setDone] = useState<string | null>(null)
-
-  const cents = Math.round(Number(amount) * 100)
-  const needsReason = Number.isFinite(cents) && cents >= REFUND_REASON_THRESHOLD_CENTS
-  const reasonOk = !needsReason || reason.trim().length >= MIN_REASON_LENGTH
-
-  return (
-    <div className="stack">
-      {error ? <Alert kind="error">{error}</Alert> : null}
-      {done ? <Alert kind="success">{done}</Alert> : null}
-
-      <label className="field">
-        <span className="field__label">Subscription id</span>
-        <span className="field__hint">From the incident or the customer.</span>
-        <input
-          className="field__input"
-          value={subscriptionId}
-          onChange={(e) => setSubscriptionId(e.target.value)}
-        />
-      </label>
-
-      <label className="field">
-        <span className="field__label">Amount</span>
-        <span className="field__hint">
-          Dollars. Anything at or above {(REFUND_REASON_THRESHOLD_CENTS / 100).toFixed(2)} needs a
-          written reason.
-        </span>
-        <input
-          className="field__input"
-          type="number"
-          step="0.01"
-          min="0.01"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
-      </label>
-
-      {needsReason ? (
-        <ReasonField label="Why is this being refunded?" value={reason} onChange={setReason} />
-      ) : null}
-
-      <button
-        className="btn"
-        type="button"
-        disabled={busy || !subscriptionId.trim() || !(cents > 0) || !reasonOk}
-        onClick={async () => {
-          setDone(null)
-          const r = await call('/api/v1/admin/refunds', 'POST', {
-            subscriptionId: subscriptionId.trim(),
-            amountCents: cents,
-            reason: reason.trim() || undefined,
-          })
-          if (r) setDone(`Refunded $${(cents / 100).toFixed(2)}.`)
-        }}
-      >
-        {busy ? 'Refunding...' : 'Refund'}
-      </button>
-    </div>
-  )
-}
-
-/**
  * Account consequences.
  *
  * Money is never a consequence here -- there is no field for a penalty and
  * there should not be one. Removing somebody costs them the work, which is
- * proportionate and does not require pricing a teenager's bad week.
+ * proportionate and does not require pricing somebody's bad week.
  */
 export function AccountAction() {
   const { error, busy, call } = useStaffAction()
@@ -269,55 +196,6 @@ export function AccountAction() {
         }}
       >
         {busy ? 'Saving...' : 'Apply'}
-      </button>
-    </div>
-  )
-}
-
-export function PayoutHold({ held }: { held?: boolean }) {
-  const { error, busy, call } = useStaffAction()
-  const [providerUserId, setProviderUserId] = useState('')
-  const [reason, setReason] = useState('')
-  const releasing = held === true
-
-  return (
-    <div className="stack">
-      {error ? <Alert kind="error">{error}</Alert> : null}
-
-      <label className="field">
-        <span className="field__label">Provider user id</span>
-        <span className="field__hint">
-          {/* Ids, not names. A search by name here would be a way to browse
-              minors, which is not a thing this console should offer. */}
-          From an incident or a support ticket. There is no search by name.
-        </span>
-        <input
-          className="field__input"
-          value={providerUserId}
-          onChange={(e) => setProviderUserId(e.target.value)}
-        />
-      </label>
-
-      <ReasonField
-        label={releasing ? 'Why is this being released?' : 'Why are payouts being held?'}
-        value={reason}
-        onChange={setReason}
-      />
-
-      <button
-        className="btn"
-        type="button"
-        disabled={
-          busy || !providerUserId.trim() || reason.trim().length < MIN_REASON_LENGTH
-        }
-        onClick={() =>
-          void call('/api/v1/admin/payout-holds', releasing ? 'DELETE' : 'POST', {
-            providerUserId: providerUserId.trim(),
-            reason,
-          })
-        }
-      >
-        {busy ? 'Saving...' : releasing ? 'Release payouts' : 'Hold payouts'}
       </button>
     </div>
   )

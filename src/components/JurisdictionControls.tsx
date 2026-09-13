@@ -127,7 +127,7 @@ export function AddJurisdictionRule({ catalog }: { catalog: ReadonlyArray<{ code
         <span className="field__label">Which service</span>
         <span className="field__hint">
           Leave as the whole state unless only one kind of work is affected. A state that restricts
-          dog walking by minors has not restricted lawn mowing.
+          dog walking has not necessarily restricted lawn mowing.
         </span>
         <select
           className="field__input"

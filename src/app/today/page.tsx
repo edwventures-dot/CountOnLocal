@@ -82,23 +82,6 @@ export default async function TodayPage() {
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: { code?: string } }
 
-    // The guardian gate. A minor whose guardian is not cleared cannot run a
-    // route, because work that may not be charged for is also work they
-    // should not be carrying on with unsupervised.
-    if (body.error?.code === 'GUARDIAN_APPROVAL_REQUIRED') {
-      return (
-        <Shell nav={<SignOutButton />} narrow>
-          <h1>Today</h1>
-          <Alert kind="error">
-            Your guardian approval is not in place, so today&rsquo;s round is on hold.
-          </Alert>
-          <p className="small muted">
-            <Link href="/start">Sort that out</Link>
-          </p>
-        </Shell>
-      )
-    }
-
     if (res.status === 403 || res.status === 404) {
       return (
         <Shell nav={<SignOutButton />} narrow>
@@ -144,7 +127,7 @@ export default async function TodayPage() {
                 </dd>
               </div>
               <div className="ledger__row">
-                <dt>You earn today</dt>
+                <dt>Today&rsquo;s visits are worth</dt>
                 <dd>{money(route.expectedEarningsCents)}</dd>
               </div>
               <div className="ledger__row">

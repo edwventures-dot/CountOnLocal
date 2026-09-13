@@ -48,9 +48,8 @@ const LABELS: Record<string, string> = {
   completion_photo: 'Photos of finished visits',
   customer_address: 'Your addresses, including the map location',
   notification: 'Records of emails we sent you',
-  ledger_entry: 'Payments, charges and payouts',
   audit_log: 'The record of actions taken on your account',
-  consent_record: 'Guardian consent you signed',
+  consent_record: 'Agreements you confirmed when you signed up or subscribed',
   incident: 'Safety reports',
   account_action: 'Warnings, suspensions and bans',
 }

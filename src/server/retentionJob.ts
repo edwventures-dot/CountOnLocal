@@ -545,7 +545,7 @@ export async function closeAccount(args: {
         ok: false,
         code: 'HAS_LIVE_SUBSCRIPTION',
         message:
-          'Cancel your subscriptions before closing your account, so nothing is charged for work nobody is scheduled to do.',
+          'Cancel your subscriptions before closing your account, so nobody is left expecting a visit that will not come.',
       }
     }
 
@@ -554,7 +554,7 @@ export async function closeAccount(args: {
       return {
         ok: false,
         code: 'OWED_MONEY',
-        message: `There is $${(owed / 100).toFixed(2)} still to be paid out. That money is yours — it needs to reach your payout account before the account can be closed.`,
+        message: `There is $${(owed / 100).toFixed(2)} still owed on this account, so it cannot be closed yet.`,
       }
     }
 

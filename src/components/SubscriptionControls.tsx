@@ -152,23 +152,20 @@ export function EndSubscription({
         <br />
         {preview.visitsReleased === 0
           ? 'No visits are affected.'
-          : `${preview.visitsReleased} visit${preview.visitsReleased === 1 ? '' : 's'} released, ${preview.visitsCredited} of them credited back to you.`}
-        {kind === 'cancel' && typeof preview.refundableCents === 'number' && preview.refundableCents > 0 ? (
-          <>
-            <br />
-            {money(preview.refundableCents)} will be refunded.
-          </>
-        ) : null}
+          : `${preview.visitsReleased} upcoming visit${preview.visitsReleased === 1 ? '' : 's'} will come off the schedule.`}
         {kind === 'pause' ? (
           <>
             <br />
-            {/* Says plainly that money is not coming back, because the
-                alternative is a customer expecting a refund that the
-                product deliberately does not give on a pause. */}
-            Nothing is refunded on a pause. Any credit stays on your account and is used when you
-            resume.
+            Visits start again when you resume.
           </>
         ) : null}
+        <br />
+        {/* This used to promise a refund on cancel and explain that credit
+            stays on the account on a pause. Neither exists: nothing is paid
+            through the app. What a customer actually wants to know here is
+            what happens to money they have already handed over, and the
+            honest answer is that it is not ours to say. */}
+        If you have paid ahead, settle that with them directly.
       </Alert>
 
       <div style={{ display: 'flex', gap: 'var(--space-3)' }}>

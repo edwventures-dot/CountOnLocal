@@ -31,7 +31,10 @@ const CHOICES: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'service_quality', label: 'The work was not done, or not done properly' },
   { value: 'property_damage', label: 'Something was damaged' },
   { value: 'animal_safety', label: 'Something happened with an animal' },
-  { value: 'payment_or_fraud', label: 'A payment or billing problem' },
+  // The stored value keeps its name; only the wording changed. Count On
+  // Local handles no payments, so "billing problem" pointed at something
+  // we cannot see or fix. Fraud and scams we can act on.
+  { value: 'payment_or_fraud', label: 'Fraud, a scam, or a dispute about money' },
   { value: 'unsafe_instruction', label: 'Someone was asked to do something unsafe' },
   { value: 'harassment_or_threat', label: 'Someone was threatened or harassed' },
   { value: 'physical_safety', label: 'Someone was hurt, or could be' },

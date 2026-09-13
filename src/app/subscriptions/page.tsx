@@ -118,13 +118,6 @@ export default async function SubscriptionsPage() {
       ) : null}
 
       <Stack>
-        {data.totalCreditCents > 0 ? (
-          <Alert kind="info">
-            You have {money(data.totalCreditCents)} of credit. It comes off your next bill
-            automatically.
-          </Alert>
-        ) : null}
-
         {live.map((s) => (
           <Card key={s.id}>
             <h2>{s.serviceName}</h2>
@@ -141,15 +134,9 @@ export default async function SubscriptionsPage() {
               <div className="ledger__row">
                 <dt>Price</dt>
                 <dd>
-                  {money(s.priceCents)}/{s.priceUnit}, billed every {s.billingCycleWeeks} weeks
+                  {money(s.priceCents)}/{s.priceUnit}, paid to them directly
                 </dd>
               </div>
-              {s.creditCents > 0 ? (
-                <div className="ledger__row">
-                  <dt>Credit waiting</dt>
-                  <dd>{money(s.creditCents)}</dd>
-                </div>
-              ) : null}
               <div className="ledger__row">
                 <dt>Status</dt>
                 <dd>{describeState(s.state)}</dd>
@@ -220,7 +207,7 @@ export default async function SubscriptionsPage() {
                   <div className="list__row">
                     <span>{h.serviceDate}</span>
                     <span className="small muted">
-                      {h.state === 'credited' ? 'Credited' : 'Done'} · {money(h.valueCents)}
+                      {h.state === 'credited' ? 'Skipped' : `Done · ${money(h.valueCents)}`}
                     </span>
                   </div>
                   {/* Only a delivered visit can be reviewed, and the server
@@ -255,20 +242,17 @@ export default async function SubscriptionsPage() {
 /**
  * State in words a customer would use.
  *
- * `payment_failed` says what to do rather than only what happened. It is
- * the one state where the customer can fix something and the subscription
- * quietly stops working if they do not.
+ * `pending` ("Waiting for payment") and `payment_failed` ("update your
+ * card") are gone. Neither state can be reached when nothing is charged,
+ * and a customer who ever saw "update your card" would reasonably conclude
+ * the app was taking money after all.
  */
 function describeState(state: string): string {
   switch (state) {
     case 'active':
       return 'Running'
-    case 'pending':
-      return 'Waiting for payment'
     case 'paused':
       return 'Paused'
-    case 'payment_failed':
-      return 'Payment did not go through — update your card'
     case 'canceled':
       return 'Cancelled'
     case 'ended':

@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { authenticate } from '@/server/auth'
 import { hasPermission } from '@/domain/roles'
-import { AccountAction, IssueRefund, PayoutHold, ResolveIncident } from '@/components/AdminControls'
+import { AccountAction, ResolveIncident } from '@/components/AdminControls'
 import {
   AddJurisdictionRule,
   LiveRules,
@@ -73,7 +73,6 @@ export default async function AdminPage() {
 
   const { items } = (await res.json()) as { items: QueueItem[] }
   const overdue = items.filter((i) => i.overdue)
-  const canRelease = hasPermission(auth.auth.roles, 'payout:release')
 
   // Read as the service role: jurisdiction_rules is readable by anyone, but
   // the posture setting and the catalog names are read here so the console
@@ -87,8 +86,6 @@ export default async function AdminPage() {
   ])
   const posture = loaded?.posture ?? 'allowlist'
   const catalog = catalogResult.data ?? []
-  const canHold = hasPermission(auth.auth.roles, 'payout:hold')
-  const canRefund = hasPermission(auth.auth.roles, 'refund:issue')
   const canModerate =
     hasPermission(auth.auth.roles, 'moderation:act') ||
     hasPermission(auth.auth.roles, 'account:suspend')
@@ -136,17 +133,6 @@ export default async function AdminPage() {
                 <dt>State</dt>
                 <dd>{item.state}</dd>
               </div>
-              {item.involvesMinor ? (
-                <div className="ledger__row">
-                  {/*
-                    Flagged, not detailed. That a minor is involved changes
-                    how this is handled; who they are is not needed to
-                    triage it and is not shown.
-                  */}
-                  <dt>Involves a minor</dt>
-                  <dd>Yes</dd>
-                </div>
-              ) : null}
               <div className="ledger__row">
                 <dt>Reference</dt>
                 <dd className="small muted">{item.incidentId}</dd>
@@ -157,40 +143,14 @@ export default async function AdminPage() {
           </Card>
         ))}
 
-        {canRefund ? (
-          <Card>
-            <h2>Refund a customer</h2>
-            <p className="muted small">
-              {/*
-                The economics, stated, because they are the reason this is
-                a one-field form rather than a workflow.
-              */}
-              Faster than their bank. A chargeback costs about $15 and damages our standing with
-              Stripe, and the money leaves either way.
-            </p>
-            <IssueRefund />
-          </Card>
-        ) : null}
-
         {canModerate ? (
           <Card>
             <h2>Account consequences</h2>
             <p className="muted small">
-              Strikes, suspensions and bans. There is deliberately no way to fine anybody: the
-              provider is often a minor whose payout account we hold.
+              Strikes, suspensions and bans. There is deliberately no way to fine anybody, and
+              nothing to take: no money passes through Count On Local.
             </p>
             <AccountAction />
-          </Card>
-        ) : null}
-
-        {canHold ? (
-          <Card>
-            <h2>Hold payouts</h2>
-            <p className="muted small">
-              Stops money reaching a provider while something is looked into. Their customers are
-              not affected.
-            </p>
-            <PayoutHold />
           </Card>
         ) : null}
 
@@ -204,15 +164,15 @@ export default async function AdminPage() {
         {/*
           Where the platform operates. Same permission as the rest of this
           console on purpose: a jurisdiction restriction exists because a
-          state's rules about minors working have not been satisfied, which
-          makes it a safety control rather than a billing setting.
+          service is not allowed somewhere, which makes it a safety control
+          rather than a convenience.
         */}
         <Card>
           <h2>Where we operate</h2>
           <p className="muted small">
             Counsel decides what goes here. Every rule needs a written reason and every change is
             audited. Refusals happen before the address is geocoded, so a customer in a closed
-            state is told before they reach a card form.
+            state is told before they agree to anything.
           </p>
           <LiveRules rules={liveRules} />
         </Card>
@@ -227,20 +187,6 @@ export default async function AdminPage() {
           <PostureControl posture={posture} />
         </Card>
 
-        {canRelease ? (
-          <Card>
-            <h2>Release payouts</h2>
-            <p className="muted small">
-              {/*
-                Separation of duties: a trust_safety_agent can place a hold
-                and cannot lift one. Showing both panels to whoever holds
-                both permissions makes that visible rather than mysterious.
-              */}
-              A different permission from placing a hold, on purpose.
-            </p>
-            <PayoutHold held />
-          </Card>
-        ) : null}
       </Stack>
     </Shell>
   )

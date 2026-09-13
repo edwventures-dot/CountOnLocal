@@ -434,7 +434,7 @@ describe('completed work cannot be skipped after the fact', () => {
 })
 
 describe('previewSkip tells the customer before they commit', () => {
-  it('warns that a same-day skip will still be billed', async () => {
+  it('warns that a same-day skip still counts towards what is owed', async () => {
     const id = await makeOccurrence('due_today')
     const r = await previewSkip({
       db: admin,
@@ -446,7 +446,7 @@ describe('previewSkip tells the customer before they commit', () => {
     expect(r.ok).toBe(true)
     if (r.ok) {
       expect(r.credit.credited).toBe(false)
-      expect(r.credit.message).toMatch(/still be billed/)
+      expect(r.credit.message).toMatch(/still counts/)
     }
     // Preview must not change anything.
     expect(await stateOf(id)).toBe('due_today')

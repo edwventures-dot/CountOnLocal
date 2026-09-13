@@ -115,7 +115,7 @@ export function checkReviewEligibility(args: {
       return {
         eligible: false,
         code: 'cycle_already_reviewed',
-        message: 'You have already left a review for this billing cycle.',
+        message: 'You have already left a review for this round of visits.',
       }
     }
   }

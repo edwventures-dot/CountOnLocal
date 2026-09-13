@@ -66,8 +66,8 @@ export function UndeliveredMail({ notices }: { notices: DeadNotice[] }) {
       ) : null}
 
       <p className="small muted">
-        {notices.length} message{notices.length === 1 ? '' : 's'} the outbox gave up on. A guardian
-        invitation here means a minor is waiting on an approval that never arrived.
+        {notices.length} message{notices.length === 1 ? '' : 's'} the outbox gave up on. A customer
+        or provider here may be waiting on something they were never told.
       </p>
 
       <ul className="list">

@@ -185,25 +185,14 @@ export default async function Storefront({ params }: Params) {
             {business.tagline ? <p style={S.tagline}>{business.tagline}</p> : null}
             <div style={S.badges}>
               {/*
-                Decided at publish from the real guardian and payout state
-                and stored on the row, because provider_profiles is revoked
-                from anon and a minor's guardian state is not public data.
-
-                This used to be unconditional, reasoning that publishing
-                requires a cleared guardian. It does -- but "cleared" is
-                also true for `not_required`, an adult with no guardian at
-                all, so every adult's page claimed a supervising adult who
-                did not exist. SAFETY_TRUST_POLICY section 19 allows
-                `Guardian connected` only when factual.
-
-                NULL shows nothing. An unearned badge is worse than a
-                missing one.
+                No trust badge. It had two values, "Guardian connected" and
+                "Identity verified", and each was a claim about a check that
+                really happened -- a guardian completing consent, or Stripe
+                verifying somebody before paying them. Neither process exists
+                on this branch, so neither can be earned. The column is still
+                there and always null, but a page that still knew how to
+                render it would be one bad row away from an unearned claim.
               */}
-              {business.public_trust_badge === 'guardian_connected' ? (
-                <span style={S.badgeGreen}>Guardian connected</span>
-              ) : business.public_trust_badge === 'identity_verified' ? (
-                <span style={S.badgeGreen}>Identity verified</span>
-              ) : null}
               {/*
                 "Payments handled securely" used to sit here. No payment is
                 handled at all now, securely or otherwise, and a trust badge

@@ -53,7 +53,7 @@ function PhotoUpload({ occurrenceId }: { occurrenceId: string }) {
         <span className="field__label">Photo (optional)</span>
         <span className="field__hint">
           Proof the job was done, if there is a dispute later. Location data is removed before it is
-          stored, and only you, the customer and their guardian can see it.
+          stored, and only you and the customer can see it.
         </span>
         <input
           className="field__input"
@@ -137,10 +137,10 @@ export function RouteStopActions({ occurrenceId }: { occurrenceId: string }) {
         <>
           <label className="field">
             <span className="field__label">Why are you skipping this one?</span>
-            {/* The customer is credited for a provider skip regardless of
-                notice, so this is a record rather than a gate. */}
+            {/* A provider skip never counts against the customer, whatever
+                the notice, so this is a record rather than a gate. */}
             <span className="field__hint">
-              They will not be charged for it. A short note helps if they ask.
+              It will not count towards what they owe you. A short note helps if they ask.
             </span>
             <input
               className="field__input"

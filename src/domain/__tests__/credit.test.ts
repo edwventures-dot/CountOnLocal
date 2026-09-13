@@ -203,7 +203,9 @@ describe('previewCustomerSkip matches the real decision', () => {
       today: TUESDAY,
     })
     expect(preview.credited).toBe(false)
-    expect(preview.message).toMatch(/still be billed/)
+    // Was /still be billed/. Nothing is billed; the visit still counts
+    // towards what the customer owes their provider directly.
+    expect(preview.message).toMatch(/still counts/)
   })
 })
 

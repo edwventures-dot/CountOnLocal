@@ -34,14 +34,14 @@ import {
 export const metadata: Metadata = {
   title: 'Count On Local -- Start a business where you live',
   description:
-    'Count On Local is a neighborhood microbusiness platform. Publish a real service page, get recurring customers nearby, and run the route, payments and schedule from one dashboard. Launching soon.',
+    'Count On Local is a neighborhood microbusiness platform. Publish a real service page, get recurring customers nearby, and run the route and schedule from one dashboard. Free, and your neighbours pay you directly. Launching soon.',
 }
 
 const PROVIDER_STEPS = [
   ['Pick what you do', 'Choose from an approved list of neighborhood services.'],
   ['Publish your page', 'A real service page with your name, your price, your schedule.'],
   ['Get neighbors subscribed', 'Share a link or print a QR flyer for your street.'],
-  ['Run your route and get paid', 'One list, one day, money in your account.'],
+  ['Run your route', 'One list, one day. Your neighbours pay you directly.'],
 ] as const
 
 const CUSTOMER_SERVICES = [
@@ -100,7 +100,7 @@ export default function Home() {
               </span>
             </div>
             <p style={S.mockFoot}>
-              Billed every 4 weeks. Pause or cancel yourself, any time, without calling anyone.
+              Paid to Jake directly. Pause or cancel yourself, any time, without calling anyone.
             </p>
           </aside>
         </section>

@@ -184,14 +184,14 @@ const UNIVERSAL: Array<{
     pattern: PHONE,
     urgent: false,
     message:
-      'Keep the conversation here rather than swapping numbers. It is what keeps the report button, the record of what was agreed, and a guardian able to see how things are going.',
+      'Keep the conversation here rather than swapping numbers. It is what keeps the report button, and the record of what was agreed.',
   },
   {
     code: 'phone_number',
     pattern: SPELLED_DIGITS,
     urgent: false,
     message:
-      'Keep the conversation here rather than swapping numbers. It is what keeps the report button, the record of what was agreed, and a guardian able to see how things are going.',
+      'Keep the conversation here rather than swapping numbers. It is what keeps the report button, and the record of what was agreed.',
   },
   {
     code: 'email_address',
@@ -205,7 +205,7 @@ const UNIVERSAL: Array<{
     pattern: SOCIAL_HANDLE,
     urgent: false,
     message:
-      'Messages need to stay on Count On Local. Moving somewhere else removes the report button and a guardian being able to see how things are going.',
+      'Messages need to stay on Count On Local. Moving somewhere else removes the report button and the record of what was agreed.',
   },
   {
     code: 'payment_app',
@@ -226,7 +226,7 @@ const UNIVERSAL: Array<{
     pattern: OFF_PLATFORM,
     urgent: false,
     message:
-      'Messages need to stay on Count On Local. Moving somewhere else removes the report button and a guardian being able to see how things are going.',
+      'Messages need to stay on Count On Local. Moving somewhere else removes the report button and the record of what was agreed.',
   },
   {
     code: 'off_platform_payment',

@@ -108,7 +108,7 @@ export function decideSkipCredit(args: {
       credited: true,
       amountCents: occurrenceValueCents,
       code: 'provider_did_not_deliver',
-      message: 'This service was not delivered, so it is credited to your next bill.',
+      message: 'This visit did not happen, so it does not count towards what you owe.',
       noticeDays: null,
     }
   }
@@ -118,7 +118,7 @@ export function decideSkipCredit(args: {
       credited: true,
       amountCents: occurrenceValueCents,
       code: 'issue_resolved_for_customer',
-      message: 'Your reported issue was resolved in your favour and this visit is credited.',
+      message: 'Your reported issue was resolved in your favour, so this visit does not count towards what you owe.',
       noticeDays: null,
     }
   }
@@ -135,7 +135,7 @@ export function decideSkipCredit(args: {
       credited: true,
       amountCents: occurrenceValueCents,
       code: 'customer_gave_notice',
-      message: 'Skipped with enough notice, so you will not be billed for this visit.',
+      message: 'Skipped with enough notice, so this visit does not count towards what you owe.',
       noticeDays,
     }
   }
@@ -147,8 +147,8 @@ export function decideSkipCredit(args: {
     code: 'customer_inside_cutoff',
     message:
       need === 0
-        ? 'This visit has already been served and will still be billed.'
-        : `Skips need ${need} ${plural(need, 'day', 'days')} notice to be free, so this visit will still be billed.`,
+        ? 'This visit has already happened, so it still counts towards what you owe.'
+        : `Skips need ${need} ${plural(need, 'day', 'days')} notice, so this visit still counts towards what you owe.`,
     noticeDays,
   }
 }

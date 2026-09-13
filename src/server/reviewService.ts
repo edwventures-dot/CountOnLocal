@@ -151,7 +151,7 @@ export async function createReview(args: {
       return {
         ok: false,
         code: 'ALREADY_EXISTS',
-        message: 'You have already left a review for this billing cycle.',
+        message: 'You have already left a review for this round of visits.',
       }
     }
     console.error('[reviews] insert failed', error.message)
