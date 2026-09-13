@@ -79,19 +79,6 @@ export default async function AccountPage() {
           </Card>
         )}
 
-        {auth.auth.roles.includes('guardian') ? (
-          <Card>
-            <h2>Someone you look after</h2>
-            <p className="muted">
-              Review what they offer, see their scheduled work, and withdraw your approval if you
-              need to.
-            </p>
-            <Link className="btn" href="/guardian">
-              Guardian view
-            </Link>
-          </Card>
-        ) : null}
-
         <Card>
           <h2>Services you buy</h2>
           <p className="muted">
@@ -101,7 +88,7 @@ export default async function AccountPage() {
           <Link className="btn" href="/subscriptions">
             Your services
           </Link>
-          <p className="small muted" style={{ marginBottom: 0 }}>
+          <p className="small muted" style={{ marginTop: 'var(--space-3)', marginBottom: 0 }}>
             There is no search yet. <Link href="/">The front page</Link> explains why.
           </p>
         </Card>

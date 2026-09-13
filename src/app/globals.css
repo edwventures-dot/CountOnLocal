@@ -205,7 +205,15 @@ a {
   margin-top: var(--space-1);
 }
 
+/* inline-block and no underline, because half of these are <Link>s, not
+   <button>s. An <a> is inline by default: its padding draws outside the
+   line box without pushing anything, so the button sat on top of the
+   sentence below it, and it inherited the underline every link gets. A
+   <button> is already inline-block, which is why nobody noticed on forms. */
 .btn {
+  display: inline-block;
+  text-align: center;
+  text-decoration: none;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
