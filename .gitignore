@@ -69,3 +69,9 @@ node_modules/
 
 # Locally generated flyer samples
 flyer-sample*.html
+# 1Password reference template: no values, safe to commit
+!.env.local.tpl
+# 1Password reference template: no values, safe to commit
+!.env.main.local.tpl
+# 1Password reference template: no values, safe to commit
+!.env.production.local.tpl
