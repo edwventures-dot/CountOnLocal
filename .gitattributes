@@ -6,3 +6,10 @@
 *.png  binary
 *.jpg  binary
 *.ico  binary
+
+# Migrations are checksummed by scripts/migrate.mjs, and the checksum is
+# over the bytes on disk. A Windows checkout with core.autocrlf=true would
+# turn every LF into CRLF, change every checksum, and the runner would
+# refuse to start -- reporting that each applied migration had been
+# edited. Keep them LF everywhere.
+*.sql text eol=lf
